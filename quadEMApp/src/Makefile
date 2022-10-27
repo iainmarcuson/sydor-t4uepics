@@ -18,6 +18,7 @@ DBD += drvNSLS2_EM.dbd
 #DBD += drvNSLS2_IC.dbd
 DBD += quadEMTestApp.dbd
 DBD += quadEMTestAppVx.dbd
+DBD += drvT4U_EM.dbd
 
 INC += drvQuadEM.h
 
@@ -27,6 +28,7 @@ quadEM_SRCS         += drvAHxxx.cpp
 quadEM_SRCS         += drvTetrAMM.cpp
 quadEM_SRCS         += drvNSLS_EM.cpp
 quadEM_SRCS         += drvNSLS2_EM.cpp
+quadEM_SRCS         += drvT4U_EM.cpp
 #quadEM_SRCS         += drvNSLS2_IC.cpp
 quadEM_SRCS_vxWorks += drvAPS_EM.cpp
 
@@ -73,6 +75,7 @@ $(PROD_NAME)_DBD += drvAHxxx.dbd
 $(PROD_NAME)_DBD += drvTetrAMM.dbd
 $(PROD_NAME)_DBD += drvNSLS_EM.dbd
 $(PROD_NAME)_DBD += drvNSLS2_EM.dbd
+$(PROD_NAME)_DBD += drvT4U_EM.dbd
 #$(PROD_NAME)_DBD += drvNSLS2_IC.dbd
 
 PROD_NAME = quadEMTestApp

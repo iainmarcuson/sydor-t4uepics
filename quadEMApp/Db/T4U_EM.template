@@ -1,0 +1,77 @@
+
+include "quadEM.template"
+
+record(bo, "$(P)$(R)BiasPEn")
+{
+    field(DESC, "P Bias Enable")
+    field(ZNAM, "Disable")
+    field(ONAM, "Enable")
+    field(DTYP, "asynInt32")
+    field(OUT, "@asyn($(PORT) 0)QE_BIAS_P")
+}
+
+record(bi, "$(P)$(R)BiasPEn_RBV")
+{
+    field(DESC, "P Bias Enable")
+    field(ZNAM, "Disable")
+    field(ONAM, "Enable")
+    field(DTYP, "asynInt32")
+    field(INP, "@asyn($(PORT) 0)QE_BIAS_P")
+    field(SCAN, "I/O Intr")
+}
+
+record(ao, "$(P)$(R)BiasPVoltage")
+{
+    field(DESC, "P Bias Voltage")
+    field(PINI, "YES")
+    field(PREC, "2")
+    field(DTYP, "asynFloat64")
+    field(OUT, "@asyn($(PORT) 0)QE_BIAS_P_VOLTAGE")
+}
+
+record(ai, "$(P)$(R)BiasPVoltage_RBV")
+{
+    field(DESC, "P Bias Voltage")
+    field(PREC, "2")
+    field(DTYP, "asynFloat64")
+    field(INP, "@asyn($(PORT) 0)QE_BIAS_P_VOLTAGE")
+    field(SCAN, "I/O Intr")
+}
+
+record(bo, "$(P)$(R)BiasNEn")
+{
+    field(DESC, "N Bias Enable")
+    field(ZNAM, "Disable")
+    field(ONAM, "Enable")
+    field(DTYP, "asynInt32")
+    field(OUT, "@asyn($(PORT) 0)QE_BIAS_N")
+}
+
+record(bi, "$(P)$(R)BiasNEn_RBV")
+{
+    field(DESC, "N Bias Enable")
+    field(ZNAM, "Disable")
+    field(ONAM, "Enable")
+    field(DTYP, "asynInt32")
+    field(INP, "@asyn($(PORT) 0)QE_BIAS_N")
+    field(SCAN, "I/O Intr")
+}
+
+record(ao, "$(P)$(R)BiasNVoltage")
+{
+    field(DESC, "N Bias Voltage")
+    field(PINI, "YES")
+    field(PREC, "2")
+    field(DTYP, "asynFloat64")
+    field(OUT, "@asyn($(PORT) 0)QE_BIAS_N_VOLTAGE")
+}
+
+record(ai, "$(P)$(R)BiasNVoltage_RBV")
+{
+    field(DESC, "N Bias Voltage")
+    field(PREC, "2")
+    field(DTYP, "asynFloat64")
+    field(INP, "@asyn($(PORT) 0)QE_BIAS_N_VOLTAGE")
+    field(SCAN, "I/O Intr")
+}
+

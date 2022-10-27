@@ -17,6 +17,14 @@
 #define MAX_PORTNAME_LEN 32
 #define MAX_IPNAME_LEN 16
 #define MAX_RANGES 8
+#define T4U_EM_TIMEOUT 0.2
+#define MAX_CHAN_READS 16       // The maximum number of channel reads to be sent in one message
+
+
+#define P_BiasN_En_String "QE_BIAS_N"
+#define P_BiasP_En_String "QE_BIAS_P"
+#define P_BiasN_Voltage_String "QE_BIAS_N_VOLTAGE"
+#define P_BiasP_Voltage_String "QE_BIAS_P_VOLTAGE"
 
 typedef struct {
     int32_t reg_num;            // Register address on T4U
@@ -32,7 +40,8 @@ public:
     void report(FILE *fp, int details);
 
     /* These are the metods that are new to this class */
-    void readThread(void);
+    void cmdReadThread(void);
+    void dataReadThread(void);
     virtual void exitHandler();
 
     /* These are functions extended from drvQuadEM */
@@ -40,9 +49,11 @@ public:
     virtual asynStatus writeFloat64(asynUser *pasynUser, epicsFloat64 value);
 
 protected:
-    int P_BiasN;
-#define FIRST_T4U_COMMAND P_BiasN
-    int P_BiasP;
+    int P_BiasN_En;
+#define FIRST_T4U_COMMAND P_BiasN_En
+    int P_BiasP_En;
+    int P_BiasN_Voltage;
+    int P_BiasP_Voltage;
 
     /* These are the methods we implement from quadEM */
     virtual asynStatus setAcquire(epicsInt32 value);
@@ -60,19 +71,22 @@ private:
     char tcpDataPortName_[MAX_PORTNAME_LEN];
     asynUser *pasynUserTCPCommand_;
     asynUser *pasynUserTCPData_;
-    epicsEventID acquireStartEvent_;
-    epicsEventID writeCmdEvent_;
+    epicsEventId acquireStartEvent_;
+    epicsEventId writeCmdEvent_;
     double ranges_[MAX_RANGES];
     double scaleFactor_;
     int readingActive_;
+    char firmwareVersion_[MAX_COMMAND_LEN];
     char ipAddress_[MAX_IPNAME_LEN];
-    char outString_[MAX_COMMAND_LEN];
-    char inString_[MAX_COMMAND_LEN];
+    char outCmdString_[MAX_COMMAND_LEN];
+    char inCmdString_[MAX_COMMAND_LEN];
+    double readCurr_[MAX_CHAN_READS*4]; // The values read from the socket
     
     std::forward_list<T4U_Reg_T> pidRegData_; /* Holds parameters for PID regs */
 
     asynStatus writeReadMeter();
     asynStatus getFirmwareVersion();
-    void process_reg(const T4U_Reg T *reg_lookup, double value);
+    void process_reg(const T4U_Reg_T *reg_lookup, double value);
     asynStatus readResponse();
+    int32_t readTextCurrVals(asynOctet *pasynOctet, void *octetPvt);
 };
