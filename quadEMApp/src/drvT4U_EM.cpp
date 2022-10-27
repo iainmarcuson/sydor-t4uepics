@@ -311,20 +311,13 @@ asynStatus drvT4U_EM::writeReadMeter()
     printf("Entered writeReadMeter()\n");
     fflush(stdout);
 
-    pasynManager->lockPort(pasynUserTCPCommand_);
-    printf("Locked command port.\n");
-    fflush(stdout);
-    
     if (strlen(outCmdString_) != 0) // Actual command
     {
         status = pasynOctetSyncIO->write(pasynUserTCPCommand_, outCmdString_, strlen(outCmdString_), T4U_EM_TIMEOUT, &nwrite);
         printf("Write status %i\n", (int) status);
         fflush(stdout);
     }
-    pasynManager->unlockPort(pasynUserTCPCommand_);
-    printf("Unlocked command port.\n");
-    fflush(stdout);
-    
+        
     return status;
 }
 
@@ -344,35 +337,20 @@ void drvT4U_EM::cmdReadThread(void)
     size_t nRead;
     int eomReason;
     int i;
-    asynOctet *pasynOctet;
-    asynInterface *pasynInterface;
-    void *octetPvt;
     char InData[MAX_COMMAND_LEN];
     size_t nRequest = MAX_COMMAND_LEN;
     static const char *functionName = "cmdReadThread";
 
     status = asynSuccess;       // -=-= FIXME Used for a different call
-    pasynInterface = pasynManager->findInterface(pasynUserTCPCommand_, asynOctetType, 1);
-    if (!pasynInterface)
-    {
-        asynPrint(pasynUserSelf, ASYN_TRACE_ERROR,
-                  "%s:%s: findInterface failed for asynOctet, status=%d\n",
-                  driverName, functionName, status);
-    }
-
-    pasynOctet = (asynOctet *)pasynInterface->pinterface;
-    octetPvt = pasynInterface->drvPvt;
 
     // Loop forever
     lock();
     while(1)
     {
         unlock();
-        epicsThreadSleep(1.0);
-        pasynManager->lockPort(pasynUserTCPCommand_);
+        epicsThreadSleep(0.001);
         memset(InData, '\0', MAX_COMMAND_LEN);
-        status = pasynOctet->read(octetPvt, pasynUserTCPCommand_, InData, nRequest, &nRead, &eomReason);
-        pasynManager->unlockPort(pasynUserTCPCommand_);
+        status = pasynOctetSyncIO->read(pasynUserTCPCommand_, InData, nRequest, T4U_EM_TIMEOUT, &nRead, &eomReason);
         lock();
         printf("Received command: %s\n", InData);
         fflush(stdout);
@@ -386,44 +364,32 @@ void drvT4U_EM::dataReadThread(void)
     size_t nRead;
     int eomReason;
     int i;
-    asynOctet *pasynOctet;
-    asynInterface *pasynInterface;
-    void *octetPvt;
     char InData[MAX_COMMAND_LEN];
     size_t nRequest = 1;        // Read only one byte here to pass to the parser
     int32_t data_read;          // How many full readings we did
     static const char *functionName = "dataReadThread";
 
     status = asynSuccess;       // -=-= FIXME Used for a different call
-    pasynInterface = pasynManager->findInterface(pasynUserTCPData_, asynOctetType, 1);
-    if (!pasynInterface)
-    {
-        asynPrint(pasynUserSelf, ASYN_TRACE_ERROR,
-                  "%s:%s: findInterface failed for asynOctet, status=%d\n",
-                  driverName, functionName, status);
-    }
-
-    pasynOctet = (asynOctet *)pasynInterface->pinterface;
-    octetPvt = pasynInterface->drvPvt;
-
+    
     // Loop forever
     lock();
     while(1)
     {
         unlock();
         epicsThreadSleep(0.001);
-        pasynManager->lockPort(pasynUserTCPData_);
         memset(InData, '\0', MAX_COMMAND_LEN);
-        pasynUserTCPData_->timeout = 1.0;
-        status = pasynOctet->read(octetPvt, pasynUserTCPData_, InData, nRequest, &nRead, &eomReason);
+        status = pasynOctetSyncIO->read(pasynUserTCPData_, InData, nRequest, T4U_EM_TIMEOUT, &nRead, &eomReason);
 
+        data_read = -1;         // Set to flush if invalid header
         if (nRead == 1)
         {
-            pasynUserTCPData_->timeout = 0.001;
+            // -=-= DEBUGGING
+            //printf("Data Read: %c\n", InData[0]);
+            //fflush(stdout);
             // Having received read data, read type and pass to handler
             if (InData[0] == 'r')   // "r"ead
             {
-                data_read = readTextCurrVals(pasynOctet, octetPvt);
+                data_read = readTextCurrVals();
             }
             else                // Bad header
             {
@@ -432,12 +398,12 @@ void drvT4U_EM::dataReadThread(void)
             
             if (data_read < 0)  // Error reading data
             {
-                pasynOctetSyncIO->flush(pasynUserTCPCommand_);
+                pasynOctetSyncIO->flush(pasynUserTCPData_);
             }
         }
 
-        pasynManager->unlockPort(pasynUserTCPData_);
         lock();
+        // -=-= DEBUGGING
         //printf("Received %i counts\n", data_read);
         if (data_read > 0)
         {
@@ -445,11 +411,11 @@ void drvT4U_EM::dataReadThread(void)
             {
                 //printf("%f, %f, %f, %f\n", readCurr_[data_idx++],
                 //       readCurr_[data_idx++], readCurr_[data_idx++], readCurr_[data_idx++]);
-                data_idx += 4;
+            data_idx += 4;
                 computePositions(&readCurr_[data_idx-4]);
             }
         }
-        fflush(stdout);
+        //fflush(stdout);
     }
     return;
 
@@ -462,7 +428,7 @@ asynStatus drvT4U_EM::readResponse()
 }
 
 // Reads the current values from a text stream.  Returns number of full reads, or negative number on failure
-int32_t drvT4U_EM::readTextCurrVals(asynOctet *pasynOctet, void *octetPvt)
+int32_t drvT4U_EM::readTextCurrVals()
 {
     char InData[MAX_COMMAND_LEN + 1];
     int data_matched;
@@ -482,7 +448,7 @@ int32_t drvT4U_EM::readTextCurrVals(asynOctet *pasynOctet, void *octetPvt)
     
     while (1)
     {
-        status = pasynOctet->read(octetPvt, pasynUserTCPCommand_, InData+bytes_read, nRequest, &nRead, &eomReason);
+        status = pasynOctetSyncIO->read(pasynUserTCPData_, InData+bytes_read, nRequest, 0.01, &nRead, &eomReason);
         if (nRead == 0)         // Problem reading
         {
             return -1;          // Error, so pass it up

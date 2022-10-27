@@ -88,5 +88,5 @@ private:
     asynStatus getFirmwareVersion();
     void process_reg(const T4U_Reg_T *reg_lookup, double value);
     asynStatus readResponse();
-    int32_t readTextCurrVals(asynOctet *pasynOctet, void *octetPvt);
+    int32_t readTextCurrVals();
 };
