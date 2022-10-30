@@ -1,6 +1,8 @@
 
 include "quadEM.template"
 
+include "gc_t4u.db"
+
 record(bo, "$(P)$(R)BiasPEn")
 {
     field(DESC, "P Bias Enable")

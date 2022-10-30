@@ -7,14 +7,14 @@ if len(sys.argv) != 2:          # Wrong number of arguments
 db_filename = 'gc_t4u.db'       # The generated database file
 hdr_string_filename = 'gc_t4u_hdr_string.h' # The generated parameter strings
 hdr_member_filename = 'gc_t4u_hdr_member.h' # The generated members
-cpp_param_filename = 'gc_t4u_cpp_params.h'  # The generated C++ code
+cpp_param_filename = 'gc_t4u_cpp_params.cpp'  # The generated C++ code
 
 db_file = open(db_filename, 'w')
 hdr_string_file = open(hdr_string_filename, 'w')
 hdr_member_file = open(hdr_member_filename, 'w')
 cpp_param_file = open(cpp_param_filename, 'w')
 
-template_file = open(sys.argv[1], 'b')
+template_file = open(sys.argv[1], 'r')
 
 # Iterate over all lines in the file
 for curr_line in template_file:
@@ -50,13 +50,13 @@ for curr_line in template_file:
     db_file.write(ai_name_string)
     db_file.write('{\n');
     db_file.write('field(DTYP, "asynFloat64")\n');
-    ao_inp_string = 'field(INP, "@asyn($(PORT) 0){}")\n'.format(param_string);
+    ai_inp_string = 'field(INP, "@asyn($(PORT) 0){}")\n'.format(param_string);
     db_file.write(ai_inp_string);
     db_file.write('field(SCAN, "I/O Intr")\n')
     db_file.write('}\n\n');
 
     # Time to write the header file string defines
-    hdr_string_file.write('#define {} {}\n'.format(param_string_name, param_string))
+    hdr_string_file.write('#define {} "{}"\n'.format(param_string_name, param_string))
 
     # Now the parameter members
     hdr_member_file.write('int {};\n'.format(param_var));
@@ -71,7 +71,7 @@ for curr_line in template_file:
         print('Invalid data type: "{}"\nin line {}\n'.format(data_type, curr_line))
         sys.exit(1)
         
-    cpp_param_file.write('createPraram({}. {}, &{});\n'.format(param_string_name, param_type, param_var));
+    cpp_param_file.write('createParam({}, {}, &{});\n'.format(param_string_name, param_type, param_var));
 
     # Now we're done
 

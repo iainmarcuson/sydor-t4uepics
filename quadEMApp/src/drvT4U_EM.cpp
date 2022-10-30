@@ -90,6 +90,7 @@ drvT4U_EM::drvT4U_EM(const char *portName, const char *qtHostAddress, int ringBu
     createParam(P_BiasP_En_String, asynParamInt32, &P_BiasP_En);
     createParam(P_BiasN_Voltage_String, asynParamFloat64, &P_BiasN_Voltage);
     createParam(P_BiasP_Voltage_String, asynParamFloat64, &P_BiasP_Voltage);
+#include "gc_t4u_cpp_params.cpp"
     
     // Create the port names
     strcpy(tcpCommandPortName_, "TCP_Command_");

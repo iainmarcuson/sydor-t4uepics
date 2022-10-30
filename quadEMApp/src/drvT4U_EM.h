@@ -26,6 +26,8 @@
 #define P_BiasN_Voltage_String "QE_BIAS_N_VOLTAGE"
 #define P_BiasP_Voltage_String "QE_BIAS_P_VOLTAGE"
 
+#include "gc_t4u_hdr_string.h"
+
 typedef struct {
     int32_t reg_num;            // Register address on T4U
     int asyn_num;               // The asyn param number assigned
@@ -54,6 +56,7 @@ protected:
     int P_BiasP_En;
     int P_BiasN_Voltage;
     int P_BiasP_Voltage;
+#include "gc_t4u_hdr_member.h"
 
     /* These are the methods we implement from quadEM */
     virtual asynStatus setAcquire(epicsInt32 value);
