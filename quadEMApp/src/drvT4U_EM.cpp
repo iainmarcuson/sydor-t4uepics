@@ -143,6 +143,7 @@ drvT4U_EM::drvT4U_EM(const char *portName, const char *qtHostAddress, int ringBu
     readingActive_ = 0;
     setIntegerParam(P_Model, QE_ModelNSLS_EM);
     setIntegerParam(P_ValuesPerRead, 5);
+    acquiring_ = 1;
     drvQuadEM::setAcquire(1);
 
     // Do everything that needs to be done when connecting to the meter initially.
@@ -222,6 +223,11 @@ asynStatus drvT4U_EM::writeInt32(asynUser *pasynUser, epicsInt32 value)
         {
             epicsSnprintf(outCmdString_, sizeof(outCmdString_), "bc 0 0x200\r\n");
         }
+        writeReadMeter();
+    }
+    else if (function = P_Range)
+    {
+        epicsSnprintf(outCmdString_, sizeof(outCmdString_), "wr 3 %i\r\n", value);
         writeReadMeter();
     }
 
