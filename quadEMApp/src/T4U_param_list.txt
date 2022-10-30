@@ -1,0 +1,6 @@
+# This contains the list of PID parameters used for code generation.  The output includes database entries, member variables, header files, and list management
+# PV Suffix, Data Type, Param String, Param String Name, Param Variable, PV Min, PV Max, Reg Min, Reg Max, Reg Num
+PIDX_Sp, f64, QE_PIDX_SP, PIDX_SpString, P_PIDXSp, -1.0, 1.0, -10000, 10000, 50
+PIDX_Kp, f64, QE_PIDX_KP, PIDX_KpString, P_PIDXKp, 0, 1.0, 0, 10000, 51
+PIDX_Ki, f64, QE_PIDX_KI, PIDX_KiString, P_PIDXKi, 0, 1.0, 0, 10000, 52
+PIDX_Kd, f64, QE_PIDX_KD, PIDX_KdString, P_PIDXKd, 0, 1.0, 0, 10000, 53
