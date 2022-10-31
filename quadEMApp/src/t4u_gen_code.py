@@ -70,9 +70,21 @@ for curr_line in template_file:
     else:
         print('Invalid data type: "{}"\nin line {}\n'.format(data_type, curr_line))
         sys.exit(1)
-        
+
+    # Create the parameter in asyn
     cpp_param_file.write('createParam({}, {}, &{});\n'.format(param_string_name, param_type, param_var));
 
+    # Now populate the register for the list
+    cpp_param_file.write('curr_reg.reg_num = {};\n'.format(reg_num));
+    cpp_param_file.write('curr_reg.asyn_num = {};\n'.format(param_var));
+    cpp_param_file.write('curr_reg.pv_min = {};\n'.format(pv_min));
+    cpp_param_file.write('curr_reg.pv_max = {};\n'.format(pv_max));
+    cpp_param_file.write('curr_reg.reg_min = {};\n'.format(reg_min));
+    cpp_param_file.write('curr_reg.reg_max = {};\n'.format(reg_max));
+
+    # Push into the list
+    cpp_param_file.write('pidRegData_.push_front(curr_reg);\n\n');
+    
     # Now we're done
 
 # Close the files

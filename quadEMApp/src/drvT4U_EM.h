@@ -31,6 +31,10 @@
 typedef struct {
     int32_t reg_num;            // Register address on T4U
     int asyn_num;               // The asyn param number assigned
+    double pv_min;              // The minimum value of the PV to scale
+    double pv_max;              // The maximum value of the PV to scale
+    double reg_min;             // The minimum value of the scaled PV
+    double reg_max;             // The maximum value of the scaled PV
 } T4U_Reg_T;
 
 /** Class to control the Sydor T4U Electrometer */

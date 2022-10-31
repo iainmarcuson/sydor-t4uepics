@@ -67,6 +67,7 @@ drvT4U_EM::drvT4U_EM(const char *portName, const char *qtHostAddress, int ringBu
     asynStatus status;
     const char *functionName = "drvT4U_EM";
     char tempString[256];
+    T4U_Reg_T curr_reg;
 
     
     ipAddress_[0] = 0;
