@@ -29,7 +29,7 @@
 #include "gc_t4u_hdr_string.h"
 
 typedef struct {
-    int32_t reg_num;            // Register address on T4U
+    int reg_num;            // Register address on T4U
     int asyn_num;               // The asyn param number assigned
     double pv_min;              // The minimum value of the PV to scale
     double pv_max;              // The maximum value of the PV to scale
@@ -70,7 +70,9 @@ protected:
     virtual asynStatus setValuesPerRead(epicsInt32 value);
     virtual asynStatus readStatus();
     virtual asynStatus reset();
-
+    virtual T4U_Reg_T *findRegByNum(const int regNum);
+    virtual T4U_Reg_T *findRegByAsyn(const int asynParam);
+    
 private:
     /* Our data */
     char *broadcastAddress_;
@@ -96,4 +98,5 @@ private:
     void process_reg(const T4U_Reg_T *reg_lookup, double value);
     asynStatus readResponse();
     int32_t readTextCurrVals();
+    double scaleParamToReg(double value, const T4U_Reg_T *reg_info, bool clip = false);
 };

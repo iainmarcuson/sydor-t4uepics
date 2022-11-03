@@ -227,7 +227,7 @@ asynStatus drvT4U_EM::writeInt32(asynUser *pasynUser, epicsInt32 value)
         }
         writeReadMeter();
     }
-    else if (function = P_Range)
+    else if (function == P_Range)
     {
         epicsSnprintf(outCmdString_, sizeof(outCmdString_), "wr 3 %i\r\n", value);
         writeReadMeter();
@@ -244,6 +244,7 @@ asynStatus drvT4U_EM::writeFloat64(asynUser *pasynUser, epicsFloat64 value)
     int status = asynSuccess;
     int channel;
     int reg_lookup;
+    T4U_Reg_T *pid_reg;
     const char *paramName;
     const char *functionName = "writeFloat64";
     
@@ -258,8 +259,15 @@ asynStatus drvT4U_EM::writeFloat64(asynUser *pasynUser, epicsFloat64 value)
     // Debugging
     printf("%s: function %i name %s\n", functionName, function, paramName);
     fflush(stdout);
-    
-    if (function == P_BiasN_Voltage)
+
+    if ((pid_reg = findRegByAsyn(function)) != nullptr)
+    {
+        int out_val = scaleParamToReg(value, pid_reg);
+        epicsSnprintf(outCmdString_, sizeof(outCmdString_), "wr %i %i\r\n",
+                      pid_reg->reg_num, out_val);
+        writeReadMeter();
+    }
+    else if (function == P_BiasN_Voltage)
     {
         epicsSnprintf(outCmdString_, sizeof(outCmdString_), "wr 5 %i\r\n", (int) value);
         writeReadMeter();
@@ -267,7 +275,15 @@ asynStatus drvT4U_EM::writeFloat64(asynUser *pasynUser, epicsFloat64 value)
 
     printf("About to exit from %s", functionName);
     fflush(stdout);
-    return (asynStatus)drvQuadEM::writeFloat64(pasynUser, value);
+    if (function < FIRST_T4U_COMMAND)
+    {
+        return (asynStatus)drvQuadEM::writeFloat64(pasynUser, value);
+    }
+    else
+    {
+        return asynSuccess;
+    }
+            
 }
 
 asynStatus drvT4U_EM::setAcquire(epicsInt32 value)
@@ -492,6 +508,56 @@ int32_t drvT4U_EM::readTextCurrVals()
     return 1;                   // Read one set
 }
 
+T4U_Reg_T *drvT4U_EM::findRegByNum(const int regNum)
+{
+    for (auto it = pidRegData_.begin(); it != pidRegData_.end(); it++)
+    {
+        if (it->reg_num == regNum)
+        {
+            return &(*it);
+        }
+    }
+    return nullptr;
+}
+
+T4U_Reg_T *drvT4U_EM::findRegByAsyn(const int asynParam)
+{
+    for (auto it = pidRegData_.begin(); it != pidRegData_.end(); it++)
+    {
+        if (it->asyn_num == asynParam)
+        {
+            return &(*it);
+        }
+    }
+    return nullptr;
+}
+
+double drvT4U_EM::scaleParamToReg(double value, const T4U_Reg_T *reg_info, bool clip /*= false*/)
+{
+    double percent_orig;
+    double scaled_value;
+
+    //-=-= Not clipped here
+    percent_orig = (value - reg_info->pv_min)/(reg_info->pv_max - reg_info->pv_min);
+    
+    scaled_value = percent_orig*(reg_info->reg_max - reg_info->reg_min)+reg_info->reg_min;
+
+    if (!clip)                  // Not clipping -- default
+    {
+        return scaled_value;
+    }
+
+    if (scaled_value > reg_info->reg_max)
+    {
+        scaled_value = reg_info->reg_max;
+    }
+    else if (scaled_value < reg_info->reg_min)
+    {
+        scaled_value = reg_info->reg_min;
+    }
+
+    return scaled_value;
+}
 
 void readThread(void *drvPvt)
 {
