@@ -227,6 +227,18 @@ asynStatus drvT4U_EM::writeInt32(asynUser *pasynUser, epicsInt32 value)
         }
         writeReadMeter();
     }
+    else if (function == P_BiasP_En)
+    {
+        if (value)              // Turn on
+        {
+            epicsSnprintf(outCmdString_, sizeof(outCmdString_), "bs 0 0x400\r\n");
+        }
+        else                    // Turn off
+        {
+            epicsSnprintf(outCmdString_, sizeof(outCmdString_), "bc 0 0x400\r\n");
+        }
+        writeReadMeter();
+    }
     else if (function == P_Range)
     {
         epicsSnprintf(outCmdString_, sizeof(outCmdString_), "wr 3 %i\r\n", value);
@@ -270,6 +282,11 @@ asynStatus drvT4U_EM::writeFloat64(asynUser *pasynUser, epicsFloat64 value)
     else if (function == P_BiasN_Voltage)
     {
         epicsSnprintf(outCmdString_, sizeof(outCmdString_), "wr 5 %i\r\n", (int) value);
+        writeReadMeter();
+    }
+    else if (function == P_BiasP_Voltage)
+    {
+        epicsSnprintf(outCmdString_, sizeof(outCmdString_), "wr 4 %i\r\n", (int) value);
         writeReadMeter();
     }
 

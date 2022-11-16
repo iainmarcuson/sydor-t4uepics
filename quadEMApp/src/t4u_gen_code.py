@@ -19,7 +19,7 @@ template_file = open(sys.argv[1], 'r')
 # Iterate over all lines in the file
 for curr_line in template_file:
     stripped_line = curr_line.strip();
-    if (stripped_line[0] == '#') or (len(stripped_line) == 0): # Blank or comment
+    if (len(stripped_line) == 0) or (stripped_line[0] == '#'): # Blank or comment
         continue                                               # Move to the next line
 
     # Split into components
