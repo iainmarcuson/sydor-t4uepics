@@ -96,3 +96,32 @@ record(mbbi, "$(P)$(R)Range_RBV")
     field(TWST, "Low")
     field(TWVL, "2")
 }
+
+record(mbbo, "$(P)$(R)DACMode")
+{
+    field(ZRST, "None")
+    field(ZRVL, "0")
+    field(ONST, "Quadrant")
+    field(ONVL, "1")
+    field(TWST, "XY")
+    field(TWVL, "2")
+    field(THST, "PID")
+    field(THVL, "3")
+    field(DTYP, "asynInt32")
+    field(OUT, "@asyn($(PORT) 0)QE_DAC_MODE")
+}
+
+record(mbbi, "$(P)$(R)DACMode_RBV")
+{
+    field(ZRST, "None")
+    field(ZRVL, "0")
+    field(ONST, "Quadrant")
+    field(ONVL, "1")
+    field(TWST, "XY")
+    field(TWVL, "2")
+    field(THST, "PID")
+    field(THVL, "3")
+    field(DTYP, "asynInt32")
+    field(INP, "@asyn($(PORT) 0)QE_DAC_MODE")
+    field(SCAN, "I/O Intr")
+}

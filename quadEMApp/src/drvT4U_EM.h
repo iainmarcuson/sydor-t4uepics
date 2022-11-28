@@ -25,6 +25,7 @@
 #define P_BiasP_En_String "QE_BIAS_P"
 #define P_BiasN_Voltage_String "QE_BIAS_N_VOLTAGE"
 #define P_BiasP_Voltage_String "QE_BIAS_P_VOLTAGE"
+#define P_DACMode_String "QE_DAC_MODE"
 
 #include "gc_t4u_hdr_string.h"
 
@@ -60,6 +61,7 @@ protected:
     int P_BiasP_En;
     int P_BiasN_Voltage;
     int P_BiasP_Voltage;
+    int P_DACMode;
 #include "gc_t4u_hdr_member.h"
 
     /* These are the methods we implement from quadEM */

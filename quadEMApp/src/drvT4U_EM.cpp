@@ -91,6 +91,7 @@ drvT4U_EM::drvT4U_EM(const char *portName, const char *qtHostAddress, int ringBu
     createParam(P_BiasP_En_String, asynParamInt32, &P_BiasP_En);
     createParam(P_BiasN_Voltage_String, asynParamFloat64, &P_BiasN_Voltage);
     createParam(P_BiasP_Voltage_String, asynParamFloat64, &P_BiasP_Voltage);
+    createParam(P_DACMode_String, asynParamInt32, &P_DACMode);
 #include "gc_t4u_cpp_params.cpp"
     
     // Create the port names
@@ -242,6 +243,13 @@ asynStatus drvT4U_EM::writeInt32(asynUser *pasynUser, epicsInt32 value)
     else if (function == P_Range)
     {
         epicsSnprintf(outCmdString_, sizeof(outCmdString_), "wr 3 %i\r\n", value);
+        writeReadMeter();
+    }
+    else if (function == P_DACMode)
+    {
+        int calc_reg = 93; // Base register
+        calc_reg = (calc_reg << 16) + 1; // Multiple functions in this register, so set to function 1 for DAC Mode
+        epicsSnprintf(outCmdString_, sizeof(outCmdString_), "wr %i %i\r\n", calc_reg, value);
         writeReadMeter();
     }
 
@@ -456,6 +464,7 @@ void drvT4U_EM::dataReadThread(void)
                 computePositions(&readCurr_[data_idx-4]);
             }
         }
+        callParamCallbacks();
         //fflush(stdout);
     }
     return;
