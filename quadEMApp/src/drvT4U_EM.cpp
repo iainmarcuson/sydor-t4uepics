@@ -92,6 +92,8 @@ drvT4U_EM::drvT4U_EM(const char *portName, const char *qtHostAddress, int ringBu
     createParam(P_BiasN_Voltage_String, asynParamFloat64, &P_BiasN_Voltage);
     createParam(P_BiasP_Voltage_String, asynParamFloat64, &P_BiasP_Voltage);
     createParam(P_DACMode_String, asynParamInt32, &P_DACMode);
+    createParam(P_PIDEn_String, asynParamInt32, &P_PIDEn);
+    
 #include "gc_t4u_cpp_params.cpp"
     
     // Create the port names
@@ -250,6 +252,18 @@ asynStatus drvT4U_EM::writeInt32(asynUser *pasynUser, epicsInt32 value)
         int calc_reg = 93; // Base register
         calc_reg = (calc_reg << 16) + 1; // Multiple functions in this register, so set to function 1 for DAC Mode
         epicsSnprintf(outCmdString_, sizeof(outCmdString_), "wr %i %i\r\n", calc_reg, value);
+        writeReadMeter();
+    }
+    else if (function == P_PIDEn)
+    {
+        char *enable_cmd[2] = {"bc", "bs"}; // On does bs, off does bc
+        
+        epicsSnprintf(outCmdString_, sizeof(outCmdString_), "%s 55 1\r\n",
+                      enable_cmd[value]); // Write to X
+        writeReadMeter();
+
+        epicsSnprintf(outCmdString_, sizeof(outCmdString_), "%s 65 1\r\n",
+                      enable_cmd[value]); // Write to Y
         writeReadMeter();
     }
 

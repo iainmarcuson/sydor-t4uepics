@@ -26,7 +26,7 @@
 #define P_BiasN_Voltage_String "QE_BIAS_N_VOLTAGE"
 #define P_BiasP_Voltage_String "QE_BIAS_P_VOLTAGE"
 #define P_DACMode_String "QE_DAC_MODE"
-
+#define P_PIDEn_String "QE_PID_EN"
 #include "gc_t4u_hdr_string.h"
 
 typedef struct {
@@ -62,6 +62,7 @@ protected:
     int P_BiasN_Voltage;
     int P_BiasP_Voltage;
     int P_DACMode;
+    int P_PIDEn;
 #include "gc_t4u_hdr_member.h"
 
     /* These are the methods we implement from quadEM */

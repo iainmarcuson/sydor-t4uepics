@@ -79,11 +79,11 @@ record(ai, "$(P)$(R)BiasNVoltage_RBV")
 
 record(mbbo, "$(P)$(R)Range")
 {
-    field(ZRST, "High")
+    field(ZRST, "Low (5mA !!)")
     field(ZRVL, "0")
-    field(ONST, "Medium")
+    field(ONST, "Med (100uA)")
     field(ONVL, "1")
-    field(TWST, "Low")
+    field(TWST, "Hi (300nA)")
     field(TWVL, "2")
 }
 
@@ -123,5 +123,24 @@ record(mbbi, "$(P)$(R)DACMode_RBV")
     field(THVL, "3")
     field(DTYP, "asynInt32")
     field(INP, "@asyn($(PORT) 0)QE_DAC_MODE")
+    field(SCAN, "I/O Intr")
+}
+
+record(bo, "$(P)$(R)PIDEn")
+{
+    field(DESC, "PID Enable")
+    field(ZNAM, "Disable")
+    field(ONAM, "Enable")
+    field(DTYP, "asynInt32")
+    field(OUT, "@asyn($(PORT) 0)QE_PID_EN")
+}
+
+record(bi, "$(P)$(R)PIDEn_RBV")
+{
+    field(DESC, "PID Enable")
+    field(ZNAM, "Disable")
+    field(ONAM, "Enable")
+    field(DTYP, "asynInt32")
+    field(INP, "@asyn($(PORT) 0)QE_PID_EN")
     field(SCAN, "I/O Intr")
 }
