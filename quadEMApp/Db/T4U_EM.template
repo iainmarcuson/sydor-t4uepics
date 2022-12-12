@@ -80,21 +80,21 @@ record(ai, "$(P)$(R)BiasNVoltage_RBV")
 record(mbbo, "$(P)$(R)Range")
 {
     field(ZRST, "Low (5mA !!)")
-    field(ZRVL, "0")
+    field(ZRVL, "2")
     field(ONST, "Med (100uA)")
     field(ONVL, "1")
     field(TWST, "Hi (300nA)")
-    field(TWVL, "2")
+    field(TWVL, "0")
 }
 
 record(mbbi, "$(P)$(R)Range_RBV")
 {
     field(ZRST, "High")
-    field(ZRVL, "0")
+    field(ZRVL, "2")
     field(ONST, "Medium")
     field(ONVL, "1")
     field(TWST, "Low")
-    field(TWVL, "2")
+    field(TWVL, "0")
 }
 
 record(mbbo, "$(P)$(R)DACMode")
