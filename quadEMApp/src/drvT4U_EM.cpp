@@ -415,8 +415,9 @@ void drvT4U_EM::cmdReadThread(void)
         memset(InData, '\0', MAX_COMMAND_LEN);
         status = pasynOctetSyncIO->read(pasynUserTCPCommand_, InData, nRequest, T4U_EM_TIMEOUT, &nRead, &eomReason);
         lock();
-        printf("Received command: %s\n", InData);
-        fflush(stdout);
+        //-=-= DEBUGGING
+        //printf("Received command: %s\n", InData);
+        //fflush(stdout);
     }
     return;
 }
