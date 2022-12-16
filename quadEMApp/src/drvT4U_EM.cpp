@@ -72,12 +72,14 @@ drvT4U_EM::drvT4U_EM(const char *portName, const char *qtHostAddress, int ringBu
     
     ipAddress_[0] = 0;
     firmwareVersion_[0] = 0;
-    
+
+    // Set a range index to a default
+    currRange_ = 0;
     // Range scale factors
     //-=-=TODO Put in actual numbers
-    ranges_[0]=1.0;
-    ranges_[1]=1.0;
-    ranges_[2]=1.0;
+    ranges_[0]=5e6;
+    ranges_[1]=14955.12;
+    ranges_[2]=47.0;
     ranges_[3]=1.0;
     ranges_[4]=1.0;
     ranges_[5]=1.0;
@@ -244,8 +246,22 @@ asynStatus drvT4U_EM::writeInt32(asynUser *pasynUser, epicsInt32 value)
     }
     else if (function == P_Range)
     {
+        // Clip the range if needed to the limits
+        if (value < 0)
+        {
+            value = 0;
+        }
+        else if (value > 2)
+        {
+            value = 2;
+        }
+        // Set in the parameter library again, since it may have been changed
+        // above.
+        status |= setIntegerParam(channel, function, value);
         epicsSnprintf(outCmdString_, sizeof(outCmdString_), "wr 3 %i\r\n", value);
         writeReadMeter();
+        
+        currRange_ = value;
     }
     else if (function == P_DACMode)
     {
@@ -543,7 +559,7 @@ int32_t drvT4U_EM::readTextCurrVals()
     // Convert to expected double
     for (uint data_idx = 0; data_idx < 4; data_idx++)
     {
-        readCurr_[data_idx] = read_vals[data_idx];
+        readCurr_[data_idx] = rawToCurrent(read_vals[data_idx]);
     }
 
     return 1;                   // Read one set
@@ -571,6 +587,16 @@ T4U_Reg_T *drvT4U_EM::findRegByAsyn(const int asynParam)
         }
     }
     return nullptr;
+}
+
+double drvT4U_EM::rawToCurrent(int rawVal)
+{
+    double calcCurrent;
+    const double kVREF = 1.50;
+
+    calcCurrent = rawVal/524288.0 * kVREF / ranges_[currRange_];
+    
+    return calcCurrent;
 }
 
 double drvT4U_EM::scaleParamToReg(double value, const T4U_Reg_T *reg_info, bool clip /*= false*/)

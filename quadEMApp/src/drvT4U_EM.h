@@ -93,6 +93,7 @@ private:
     char outCmdString_[MAX_COMMAND_LEN];
     char inCmdString_[MAX_COMMAND_LEN];
     double readCurr_[MAX_CHAN_READS*4]; // The values read from the socket
+    int currRange_;
     
     std::forward_list<T4U_Reg_T> pidRegData_; /* Holds parameters for PID regs */
 
@@ -102,4 +103,5 @@ private:
     asynStatus readResponse();
     int32_t readTextCurrVals();
     double scaleParamToReg(double value, const T4U_Reg_T *reg_info, bool clip = false);
+    double rawToCurrent(int rawVal);
 };
