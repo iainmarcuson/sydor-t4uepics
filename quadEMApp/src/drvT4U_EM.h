@@ -21,12 +21,15 @@
 #define MAX_CHAN_READS 16       // The maximum number of channel reads to be sent in one message
 
 
+#define P_SampleFreq_String "QE_SAMPLE_FREQ"
 #define P_BiasN_En_String "QE_BIAS_N"
 #define P_BiasP_En_String "QE_BIAS_P"
 #define P_BiasN_Voltage_String "QE_BIAS_N_VOLTAGE"
 #define P_BiasP_Voltage_String "QE_BIAS_P_VOLTAGE"
 #define P_DACMode_String "QE_DAC_MODE"
 #define P_PIDEn_String "QE_PID_EN"
+#define P_PIDCuEn_String "QE_PID_CU_EN"
+#define P_PIDHystEn_String "QE_PID_HYST_EN"
 #include "gc_t4u_hdr_string.h"
 
 typedef struct {
@@ -61,8 +64,11 @@ protected:
     int P_BiasP_En;
     int P_BiasN_Voltage;
     int P_BiasP_Voltage;
+    int P_SampleFreq;
     int P_DACMode;
     int P_PIDEn;
+    int P_PIDCuEn;
+    int P_PIDHystEn;
 #include "gc_t4u_hdr_member.h"
 
     /* These are the methods we implement from quadEM */
@@ -104,4 +110,5 @@ private:
     int32_t readTextCurrVals();
     double scaleParamToReg(double value, const T4U_Reg_T *reg_info, bool clip = false);
     double rawToCurrent(int rawVal);
+    int32_t processReceivedCommand(char *cmdString);
 };

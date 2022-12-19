@@ -144,3 +144,67 @@ record(bi, "$(P)$(R)PIDEn_RBV")
     field(INP, "@asyn($(PORT) 0)QE_PID_EN")
     field(SCAN, "I/O Intr")
 }
+
+#------------------
+# Cutout PVs
+#------------------
+
+record(bo, "$(P)$(R)PIDCuEn")
+{
+    field(DESC, "PID Cutout Enable")
+    field(ZNAM, "Disable")
+    field(ONAM, "Enable")
+    field(DTYP, "asynInt32")
+    field(OUT, "@asyn($(PORT) 0)QE_PID_CU_EN")
+}
+
+record(bi, "$(P)$(R)PIDCuEn_RBV")
+{
+    field(DESC, "PID Cutout Enable")
+    field(ZNAM, "Disable")
+    field(ONAM, "Enable")
+    field(DTYP, "asynInt32")
+    field(INP, "@asyn($(PORT) 0)QE_PID_CU_EN")
+    field(SCAN, "I/O Intr")
+}
+
+record(bo, "$(P)$(R)PIDHystEn")
+{
+    field(DESC, "PID Cutout Hyst Enable")
+    field(ZNAM, "Disable")
+    field(ONAM, "Enable")
+    field(DTYP, "asynInt32")
+    field(OUT, "@asyn($(PORT) 0)QE_PID_HYST_EN")
+}
+
+record(bi, "$(P)$(R)PIDHystEn_RBV")
+{
+    field(DESC, "PID Cutout Hyst Enable")
+    field(ZNAM, "Disable")
+    field(ONAM, "Enable")
+    field(DTYP, "asynInt32")
+    field(INP, "@asyn($(PORT) 0)QE_PID_HYST_EN")
+    field(SCAN, "I/O Intr")
+}
+
+#------------------------
+# Sampling Frequency
+#------------------------
+
+record(longout, "$(P)$(R)SampleFreq")
+{
+    field(DESC, "T4U Sampling Frequency")
+    field(DTYP, "asynInt32")
+    field(OUT, "@asyn($(PORT) 0)QE_SAMPLE_FREQ")
+    field(VAL, "4000")
+    field(PINI, "YES")
+}
+
+record(longin, "$(P)$(R)SampleFreq_RBV")
+{
+    field(DESC, "T4U Sampling Frequency")
+    field(DTYP, "asynInt32")
+    field(INP, "@asyn($(PORT) 0)QE_SAMPLE_FREQ")
+    field(SCAN, "I/O Intr")
+}
+

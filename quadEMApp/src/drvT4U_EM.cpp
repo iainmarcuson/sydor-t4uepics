@@ -40,6 +40,27 @@
 // 2^20 is maximum counts for 20-bit ADC
 #define MAX_COUNTS 1048576.0
 
+#define REG_T4U_CTRL            0
+#define BIAS_N_EN_MASK          (1<<9)
+#define BIAS_P_EN_MASK          (1<<10)
+
+#define REG_T4U_FREQ            1
+
+#define REG_T4U_RANGE           3
+#define RANGE_SEL_MASK          0x3
+#define RANGE_AUTO_MASK         (1<<7)
+
+#define REG_PIDX_CTRL           55
+#define REG_PIDY_CTRL           65
+#define PID_EN_MASK             0x1
+
+#define REG_OUTPUT_MODE         93
+#define OUTPUT_MODE_MASK        0x7
+
+#define REG_PID_CUTOUT_MODE     94
+#define CUTOUT_ENABLE_MASK      0x01
+#define HYST_REENABLE_MASK      0x02
+
 typedef enum {
   Phase0, 
   Phase1, 
@@ -93,8 +114,11 @@ drvT4U_EM::drvT4U_EM(const char *portName, const char *qtHostAddress, int ringBu
     createParam(P_BiasP_En_String, asynParamInt32, &P_BiasP_En);
     createParam(P_BiasN_Voltage_String, asynParamFloat64, &P_BiasN_Voltage);
     createParam(P_BiasP_Voltage_String, asynParamFloat64, &P_BiasP_Voltage);
+    createParam(P_SampleFreq_String, asynParamInt32, &P_SampleFreq);
     createParam(P_DACMode_String, asynParamInt32, &P_DACMode);
     createParam(P_PIDEn_String, asynParamInt32, &P_PIDEn);
+    createParam(P_PIDCuEn_String, asynParamInt32, &P_PIDCuEn);
+    createParam(P_PIDHystEn_String, asynParamInt32, &P_PIDHystEn);
     
 #include "gc_t4u_cpp_params.cpp"
     
@@ -244,6 +268,12 @@ asynStatus drvT4U_EM::writeInt32(asynUser *pasynUser, epicsInt32 value)
         }
         writeReadMeter();
     }
+    else if (function == P_SampleFreq)
+    {
+        epicsSnprintf(outCmdString_, sizeof(outCmdString_), "wr %i %i\r\n",
+                      REG_T4U_FREQ, value);
+        writeReadMeter();
+    }
     else if (function == P_Range)
     {
         // Clip the range if needed to the limits
@@ -272,7 +302,7 @@ asynStatus drvT4U_EM::writeInt32(asynUser *pasynUser, epicsInt32 value)
     }
     else if (function == P_PIDEn)
     {
-        char *enable_cmd[2] = {"bc", "bs"}; // On does bs, off does bc
+        char *enable_cmd[2] = {"bc", "bs"}; // Off does bc; On does bs
         
         epicsSnprintf(outCmdString_, sizeof(outCmdString_), "%s 55 1\r\n",
                       enable_cmd[value]); // Write to X
@@ -281,6 +311,26 @@ asynStatus drvT4U_EM::writeInt32(asynUser *pasynUser, epicsInt32 value)
         epicsSnprintf(outCmdString_, sizeof(outCmdString_), "%s 65 1\r\n",
                       enable_cmd[value]); // Write to Y
         writeReadMeter();
+    }
+    else if ((function == P_PIDCuEn) || (function == P_PIDHystEn))
+    {
+        char *enable_cmd[2] = {"bc", "bs"}; // Off does bc; on does bs.
+        int reg = REG_PID_CUTOUT_MODE;
+        int mask;
+
+        if (function == P_PIDCuEn)
+        {
+            mask = CUTOUT_ENABLE_MASK;
+        }
+        else
+        {
+            mask = HYST_REENABLE_MASK;
+        }
+
+        epicsSnprintf(outCmdString_, sizeof(outCmdString_), "%s %i %i\r\n",
+                      enable_cmd[value], reg, mask); // Write to X
+        writeReadMeter();
+
     }
 
     printf("About to return from %s\n", functionName);
@@ -417,7 +467,8 @@ void drvT4U_EM::cmdReadThread(void)
     int eomReason;
     int i;
     char InData[MAX_COMMAND_LEN];
-    size_t nRequest = MAX_COMMAND_LEN;
+    size_t nRequest = 1;
+    int processRet;
     static const char *functionName = "cmdReadThread";
 
     status = asynSuccess;       // -=-= FIXME Used for a different call
@@ -426,14 +477,69 @@ void drvT4U_EM::cmdReadThread(void)
     lock();
     while(1)
     {
+        int totalBytesRead;
+        bool commandReceived;
         unlock();
         epicsThreadSleep(0.001);
+        totalBytesRead = 0;
         memset(InData, '\0', MAX_COMMAND_LEN);
-        status = pasynOctetSyncIO->read(pasynUserTCPCommand_, InData, nRequest, T4U_EM_TIMEOUT, &nRead, &eomReason);
+        commandReceived = false; // No proper command recieved yet
+        while (1)
+        {
+            status = pasynOctetSyncIO->read(pasynUserTCPCommand_, InData+totalBytesRead, nRequest, T4U_EM_TIMEOUT, &nRead, &eomReason);
+            if (nRead == 1) // Read a byte successfully
+            {
+                totalBytesRead++;
+                if (*(InData+totalBytesRead-1) == '\n') // End of a command
+                {
+                    commandReceived = true;
+                    break;      // Break to parse the command
+                }
+
+                if (totalBytesRead >= (MAX_COMMAND_LEN -1)) // Too long
+                {
+                    break;
+                }
+            }
+            else                // No byte read -- assume an error
+            {
+                break;
+            }
+        }
         lock();
-        //-=-= DEBUGGING
-        //printf("Received command: %s\n", InData);
-        //fflush(stdout);
+        
+        if (commandReceived)    //  We got a valid command
+        {
+            //-=-= DEBUGGING
+            printf("Received command: %s\n", InData);
+            fflush(stdout);
+            
+            processRet = processReceivedCommand(InData); // Process it
+            
+            if (processRet < 0) // Some variety of error
+            {
+                if (processRet == -1) // Unknown register
+                {
+                    printf("Error parsing: %s\nUnknown register.\n", InData);
+                    fflush(stdout);
+                }
+                else
+                {
+                    printf("Unknown error parsing: %s\b", InData);
+                    fflush(stdout);
+                }      
+            }
+        }
+        else                    // We did not get a full command one way or another
+        {
+            if (totalBytesRead > 0) // Read part of a command
+            {
+                unlock();
+                status = pasynOctetSyncIO->flush(pasynUserTCPCommand_); // Flush the buffer and try again
+                lock();
+            }
+        }    
+        
     }
     return;
 }
@@ -502,6 +608,109 @@ void drvT4U_EM::dataReadThread(void)
 
 }
 
+int32_t drvT4U_EM::processReceivedCommand(char *cmdString)
+{
+    int32_t reg_num, reg_val;
+    int args_parsed;
+    T4U_Reg_T *pid_reg;
+
+    // We only accept rr commands.
+    args_parsed = sscanf(cmdString, " rr %i %i\n", &reg_num, &reg_val);
+
+    if (args_parsed != 2)       // Not a command we accept, or invalid number of arguments
+    {
+        return 1;              // We don't handle the command, but that is possibly okay, since it could be e.g. a valid "bs" command
+    }
+
+    pid_reg = findRegByNum(reg_num); // See if this is a PID register that needs scaling
+
+    if (pid_reg)                // It is a PID register
+    {
+        double raw_percent;
+        double final_val;
+        raw_percent = (reg_val - pid_reg->reg_min)/(pid_reg->reg_max - pid_reg->reg_min);
+
+        final_val = raw_percent*(pid_reg->pv_max - pid_reg->pv_min) + pid_reg->pv_min;
+
+        setDoubleParam(pid_reg->asyn_num, final_val);
+    }
+    else                        // Not a PID register
+    {
+        if (reg_num == REG_T4U_CTRL)
+        {
+            if (reg_val & BIAS_N_EN_MASK)
+            {
+                setIntegerParam(P_BiasN_En, 1);
+            }
+            else
+            {
+                setIntegerParam(P_BiasN_En, 0);
+            }
+
+            if (reg_val & BIAS_P_EN_MASK)
+            {
+                setIntegerParam(P_BiasP_En, 1);
+            }
+            else
+            {
+                setIntegerParam(P_BiasP_En, 0);
+            }
+        }
+        else if (reg_num == REG_T4U_FREQ)
+        {
+            setIntegerParam(P_SampleFreq, reg_val);
+        }
+        else if (reg_num == REG_T4U_RANGE)
+        {
+            //-=-= TODO We may incorporate autorange later
+            int range_val = reg_val & RANGE_SEL_MASK;
+            setIntegerParam(P_Range, range_val);
+        }
+        else if (reg_num == REG_PIDX_CTRL) // PID X control -- assumed same as PID Y
+        {
+            int enable_val = reg_val & PID_EN_MASK;
+            setIntegerParam(P_PIDEn, enable_val);
+        }
+        else if (reg_num == REG_PIDY_CTRL) // Assumed same as PID X, so swallow
+        {
+            // Just swallow it.
+        }
+        else if (reg_num == REG_OUTPUT_MODE)
+        {
+            //-=-= TODO PID Inhibit, External Trigger Enable, and Calc Mode
+            // to be added later
+            int dac_mode = reg_val & OUTPUT_MODE_MASK;
+            setIntegerParam(P_DACMode, dac_mode);
+        }
+        else if (reg_num == REG_PID_CUTOUT_MODE)
+        {
+            if (reg_val & CUTOUT_ENABLE_MASK)
+            {
+                setIntegerParam(P_PIDCuEn, 1);
+            }
+            else
+            {
+                setIntegerParam(P_PIDCuEn, 0);
+            }
+
+            if (reg_val & HYST_REENABLE_MASK)
+            {
+                setIntegerParam(P_PIDHystEn, 1);
+            }
+            else
+            {
+                setIntegerParam(P_PIDHystEn, 0);
+            }
+        }
+        else                    // An unhandled command
+        {
+            return -1;          // Flag an error
+        }
+            
+    }
+    
+    return 0;                   // Return a success
+}
 
 asynStatus drvT4U_EM::readResponse()
 {
