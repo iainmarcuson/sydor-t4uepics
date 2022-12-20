@@ -208,3 +208,29 @@ record(longin, "$(P)$(R)SampleFreq_RBV")
     field(SCAN, "I/O Intr")
 }
 
+#--------------------------
+# Overrides
+#--------------------------
+
+record(ao, "$(P)$(R)IntegrationTime")
+{
+    field(VAL, "0.00025")
+    field(PINI, "YES")
+    field(PREC, "6")
+}
+
+record(ai, "$(P)$(R)IntegrationTime_RBV")
+{
+    field(PREC, "6")
+}
+
+record(ai, "$(P)$(R)SampleTime_RBV")
+{
+    field(PREC, "6")
+}
+
+record(mbbo, "$(P)$(R)Geometry")
+{
+    field(VAL, "1")
+}
+
