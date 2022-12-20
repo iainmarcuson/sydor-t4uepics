@@ -234,3 +234,8 @@ record(mbbo, "$(P)$(R)Geometry")
     field(VAL, "1")
 }
 
+record(mbbo, "$(P)$(R)Resolution")
+{
+    field(VAL, "1")
+    field(PINI, "YES")
+}

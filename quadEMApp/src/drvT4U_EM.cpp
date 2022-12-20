@@ -175,7 +175,6 @@ drvT4U_EM::drvT4U_EM(const char *portName, const char *qtHostAddress, int ringBu
     setIntegerParam(P_Model, QE_ModelSydor_EM);
     setIntegerParam(P_ValuesPerRead, 5);
     setStringParam(P_Firmware, "1.48");
-    setIntegerParam(P_Resolution, 1);
     setDoubleParam(P_Temperature, 1234.5);
     setIntegerParam(P_Geometry, 1);
     //-=-= TODO FIXME Figure out how SampleTime works with averaging
