@@ -89,11 +89,11 @@ record(mbbo, "$(P)$(R)Range")
 
 record(mbbi, "$(P)$(R)Range_RBV")
 {
-    field(ZRST, "High")
+    field(ZRST, "Low (5mA !!)")
     field(ZRVL, "2")
-    field(ONST, "Medium")
+    field(ONST, "Med (100uA)")
     field(ONVL, "1")
-    field(TWST, "Low")
+    field(TWST, "Hi (300nA)")
     field(TWVL, "0")
 }
 
