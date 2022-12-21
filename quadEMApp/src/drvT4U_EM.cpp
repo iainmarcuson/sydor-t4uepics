@@ -732,7 +732,7 @@ int32_t drvT4U_EM::readTextCurrVals()
     size_t nRead;                  // How many bytes read in one command
     uint32_t bytes_read = 0;    // Cumulative bytes read
     size_t nRequest = 1;           // Read one byte at a time
-    int read_vals[4];           // Hold the four read values
+    double read_vals[4];           // Hold the four read values
     
 
     // Null out the input array
@@ -763,7 +763,7 @@ int32_t drvT4U_EM::readTextCurrVals()
     }
 
     // Now parse the values
-    data_matched = sscanf(InData, "ead %i , %i , %i , %i ",
+    data_matched = sscanf(InData, "ead %lf , %lf , %lf , %lf ",
                           &read_vals[0], &read_vals[1], &read_vals[2], &read_vals[3]);
     if (data_matched != 4)        // Bad format
     {
@@ -773,7 +773,7 @@ int32_t drvT4U_EM::readTextCurrVals()
     // Convert to expected double
     for (uint data_idx = 0; data_idx < 4; data_idx++)
     {
-        readCurr_[data_idx] = rawToCurrent(read_vals[data_idx]);
+        readCurr_[data_idx] = read_vals[data_idx]; // We read in currents directly
     }
 
     return 1;                   // Read one set
