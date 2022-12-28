@@ -196,7 +196,7 @@ record(longout, "$(P)$(R)SampleFreq")
     field(DESC, "T4U Sampling Frequency")
     field(DTYP, "asynInt32")
     field(OUT, "@asyn($(PORT) 0)QE_SAMPLE_FREQ")
-    field(VAL, "4000")
+    field(VAL, "4500")
     field(PINI, "YES")
 }
 
