@@ -558,6 +558,11 @@ void drvT4U_EM::dataReadThread(void)
     char InData[MAX_COMMAND_LEN];
     size_t nRequest = 1;        // Read only one byte here to pass to the parser
     int32_t data_read;          // How many full readings we did
+    
+    const int32_t kREAD_TEXT = 0;
+    const int32_t kREAD_BINARY = 1;
+    int32_t read_path;          // Whether we read via text or via binary
+    
     static const char *functionName = "dataReadThread";
 
     status = asynSuccess;       // -=-= FIXME Used for a different call
@@ -581,6 +586,12 @@ void drvT4U_EM::dataReadThread(void)
             if (InData[0] == 'r')   // "r"ead
             {
                 data_read = readTextCurrVals();
+                read_path = kREAD_TEXT;
+            }
+            else if (InData[0] == 'B') // B1
+            {
+                data_read = readBroadcastPayload();
+                read_path = kREAD_BINARY;
             }
             else                // Bad header
             {
@@ -598,13 +609,39 @@ void drvT4U_EM::dataReadThread(void)
         //printf("Received %i counts\n", data_read);
         if (data_read > 0)
         {
-            for (int data_idx = 0; data_idx < (data_read*4); )
+            if (read_path == kREAD_TEXT) // We read from a text command
             {
-                //printf("%f, %f, %f, %f\n", readCurr_[data_idx++],
-                //       readCurr_[data_idx++], readCurr_[data_idx++], readCurr_[data_idx++]);
-            data_idx += 4;
-                computePositions(&readCurr_[data_idx-4]);
+                // Just use the given values
+                for (int data_idx = 0; data_idx < (data_read*4); )
+                {
+                    data_idx += 4;
+                    computePositions(&readCurr_[data_idx-4]);
+                }
             }
+            else if (read_path == kREAD_BINARY) // We read from binary
+            {
+                // Much data massaging to do
+                // For now, just send dummy values and clear the buffer
+                int32_t num_reads = bc_hdr_.num_reads;
+                double read_vals[4];
+                read_vals[1] = 100;
+                read_vals[2] = 100;
+                read_vals[3] = 100;
+                read_vals[0] = 100;
+
+                for (int32_t read_idx = 0; read_idx < num_reads; read_idx++)
+                {
+                    read_vals[0] += 1;
+                    computePositions(read_vals);
+                }
+                delete bc_data_payload_;
+            }
+            else                // Not supposed to be here
+            {
+                printf("Error: Impossible position reading data.\n");
+                fflush(stdout);
+            }
+            
         }
         callParamCallbacks();
         //fflush(stdout);
@@ -722,7 +759,166 @@ asynStatus drvT4U_EM::readResponse()
     return asynSuccess;
 }
 
-// Reads the current values from a text stream.  Returns number of full reads, or negative number on failure
+asynStatus drvT4U_EM::readDataParam(size_t nRequest, char *dest, size_t *nRead)
+{
+    asynStatus status;
+    char c_data;
+    uint16_t s_data;
+    uint32_t u_data;            // Holds the data being read
+    double READ_TIMEOUT = 0.01; // The timeout to read the data -- they should all be here
+    int eomReason;
+
+    if (nRequest == 1)          // Reading one byte
+    {
+        status = pasynOctetSyncIO->read(pasynUserTCPData_, &c_data, nRequest, 0.01, nRead, &eomReason);
+        if (status)             // Error reading
+        {
+            return status;      // Abort
+        }
+        *dest = c_data;         // Copy the value
+        return asynSuccess;
+    }
+    
+    else if (nRequest == 2)     // Reading a network short
+    {
+        status = pasynOctetSyncIO->read(pasynUserTCPData_, (char *) &s_data, nRequest, 0.01, nRead, &eomReason);
+        if (status)             // Error reading
+        {
+            return status;      // Abort
+        }
+        *((uint16_t *)dest) = ntohs(s_data);
+        return asynSuccess;
+    }
+
+    else if (nRequest == 4)     // Reading a network log
+    {
+        status = pasynOctetSyncIO->read(pasynUserTCPData_, (char *) &u_data, nRequest, 0.01, nRead, &eomReason);
+        if (status)             // Error reading
+        {
+            return status;      // Abort
+        }
+        *((uint32_t *)dest) = ntohl(u_data);
+        return asynSuccess;
+    }
+    else                        // Invalid length
+    {
+        return asynError;       // Note there was an error
+    }
+
+}
+
+// Read the values from a binary broadcast payload.  Returns number of full reads, or negative number on failure.
+int32_t drvT4U_EM::readBroadcastPayload()
+{
+    asynStatus status;
+    size_t nRequest;
+    size_t nRead;               // How many bytes read
+    char c_data;
+    uint16_t s_data;
+    uint32_t u_data;            // Hold the data read from a header
+    uint16_t bytes_read;        // Bytes read starting with frame number
+    int eomReason;
+
+    // Read second byte of header
+    status = readDataParam(1, &c_data, &nRead);
+    if ((status) || (c_data != 1)) // Unsuccessful read or not part of header "B\x01"
+    {
+        return -1;              // Report error
+    }
+
+    // Read total length
+    status = readDataParam(2, (char *) &bc_hdr_.total_len, &nRead);
+    if (status)                 // Report error
+    {
+        return -1;
+    }
+            
+    // Read frame number
+    status = readDataParam(4, (char *) &bc_hdr_.frame_num, &nRead);
+    if (status)                 // Report error
+    {
+        return -1;
+    }
+    bytes_read += nRead;
+
+    // Read gain
+    status = readDataParam(2, (char *) &bc_hdr_.gain, &nRead);
+    if (status)                 // Report error
+    {
+        return -1;
+    }
+    bytes_read += nRead;
+
+    // Read Decimation
+    status = readDataParam(2, (char *) &bc_hdr_.decimation, &nRead);
+    if (status)                 // Report error
+    {
+        return -1;
+    }
+    bytes_read += nRead;
+
+    // Read Status
+    status = readDataParam(4, (char *) &bc_hdr_.status, &nRead);
+    if (status)
+    {
+        return -1;
+    }
+    bytes_read += nRead;
+    
+    // Read Units
+    status = readDataParam(2, (char *) &bc_hdr_.units, &nRead);
+    if (status)
+    {
+        return -1;
+    }
+    bytes_read += nRead;
+
+    // Read Number of Reads
+    status = readDataParam(4, (char *)  &bc_hdr_.num_reads, &nRead);
+    if (status)
+    {
+        return -1;
+    }
+    bytes_read += nRead;
+
+    // If we made it this far, it is time to read the actual data points.
+
+    // First, allocate the buffer
+    nRequest = bc_hdr_.num_reads * 4 * 4; // Four channels * four bytes/channels
+    bc_data_payload_ = new char[bc_hdr_.num_reads * 4 * 4]; // Allocate the memory
+
+    if (bc_data_payload_ == nullptr) // Error allocating memory
+    {
+        return -1;
+    }
+
+    status = pasynOctetSyncIO->read(pasynUserTCPData_, bc_data_payload_, nRequest, 0.01, &nRead, &eomReason);
+
+    if (status)                 // An error
+    {
+        //-=-= DEBUGGING
+        printf("Error reading data payload: %i.\n", status);
+        fflush(stdout);
+        delete bc_data_payload_; // Clear the buffer
+        return -1;
+    }
+
+    // Now compare the "checksum"
+    nRequest = 1;
+    status = pasynOctetSyncIO->read(pasynUserTCPData_, &c_data, nRequest, 0.01, &nRead, &eomReason);
+    if (status || (c_data != '*'))
+    {
+        //-=-= DEBUGGING
+        printf("Checksum error.\n");
+        fflush(stdout);
+        delete bc_data_payload_; // Clear the buffer
+        return -1;               // Return error
+    }
+    
+    return bc_hdr_.num_reads;                   // Return total current readings
+}
+
+// Reads the current values from a text stream.  Returns number of full reads, or negative number on failure.
 int32_t drvT4U_EM::readTextCurrVals()
 {
     char InData[MAX_COMMAND_LEN + 1];

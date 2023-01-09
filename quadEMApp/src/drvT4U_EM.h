@@ -11,6 +11,8 @@
 #include <forward_list>
 #include <cstdint>
 
+#include <arpa/inet.h>
+
 #include "drvQuadEM.h"
 
 #define MAX_COMMAND_LEN 256
@@ -40,6 +42,16 @@ typedef struct {
     double reg_min;             // The minimum value of the scaled PV
     double reg_max;             // The maximum value of the scaled PV
 } T4U_Reg_T;
+
+typedef struct {
+    uint16_t total_len;
+    uint32_t frame_num;
+    uint16_t gain;
+    uint16_t decimation;
+    uint32_t status;
+    uint16_t units;
+    uint32_t num_reads;
+} T4U_Payload_Header_T;
 
 /** Class to control the Sydor T4U Electrometer */
 class drvT4U_EM : public drvQuadEM {
@@ -100,6 +112,8 @@ private:
     char inCmdString_[MAX_COMMAND_LEN];
     double readCurr_[MAX_CHAN_READS*4]; // The values read from the socket
     int currRange_;
+    char *bc_data_payload_;      // Broadcast data payload
+    T4U_Payload_Header_T bc_hdr_; // Broadcast data header
     
     std::forward_list<T4U_Reg_T> pidRegData_; /* Holds parameters for PID regs */
 
@@ -111,4 +125,6 @@ private:
     double scaleParamToReg(double value, const T4U_Reg_T *reg_info, bool clip = false);
     double rawToCurrent(int rawVal);
     int32_t processReceivedCommand(char *cmdString);
+    asynStatus readDataParam(size_t nRequest, char *dest, size_t *nRead);
+    int32_t readBroadcastPayload();
 };
