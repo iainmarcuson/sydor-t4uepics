@@ -32,8 +32,8 @@
 #define BROADCAST_TIMEOUT 0.2
 #define NSLS_EM_TIMEOUT   0.1
 
-#define COMMAND_PORT    13001
-#define DATA_PORT       13002
+#define COMMAND_PORT    15001
+#define DATA_PORT       15002
 #define MIN_INTEGRATION_TIME 400e-6
 #define MAX_INTEGRATION_TIME 1.0
 #define FREQUENCY 1e6
@@ -558,7 +558,6 @@ void drvT4U_EM::dataReadThread(void)
     char InData[MAX_COMMAND_LEN];
     size_t nRequest = 1;        // Read only one byte here to pass to the parser
     int32_t data_read;          // How many full readings we did
-    
     const int32_t kREAD_TEXT = 0;
     const int32_t kREAD_BINARY = 1;
     int32_t read_path;          // Whether we read via text or via binary
@@ -623,6 +622,7 @@ void drvT4U_EM::dataReadThread(void)
                 // Much data massaging to do
                 // For now, just send dummy values and clear the buffer
                 int32_t num_reads = bc_hdr_.num_reads;
+                uint32_t *curr_raw = (uint32_t *)bc_data_payload_;
                 double read_vals[4];
                 read_vals[1] = 100;
                 read_vals[2] = 100;
@@ -631,9 +631,26 @@ void drvT4U_EM::dataReadThread(void)
 
                 for (int32_t read_idx = 0; read_idx < num_reads; read_idx++)
                 {
-                    read_vals[0] += 1;
+                    if (bc_hdr_.units) // Reading current
+                    {
+                        read_vals[0] = (double) (*((float *) &curr_raw[0]));
+                        read_vals[1] = (double) (*((float *) &curr_raw[1]));
+                        read_vals[2] = (double) (*((float *) &curr_raw[2]));
+                        read_vals[3] = (double) (*((float *) &curr_raw[3]));
+                    }
+                    else // Reading raw values
+                    {
+                        read_vals[0] = rawToCurrent(curr_raw[0]);
+                        read_vals[1] = rawToCurrent(curr_raw[1]);
+                        read_vals[2] = rawToCurrent(curr_raw[2]);
+                        read_vals[3] = rawToCurrent(curr_raw[3]);
+                    }
+                    curr_raw += 4;
+                    
                     computePositions(read_vals);
                 }
+
+                
                 delete bc_data_payload_;
             }
             else                // Not supposed to be here
