@@ -253,11 +253,11 @@ asynStatus drvT4U_EM::writeInt32(asynUser *pasynUser, epicsInt32 value)
     {
         if (value)              // Turn on
         {
-            epicsSnprintf(outCmdString_, sizeof(outCmdString_), "bs 0 0x200\r\n");
+            epicsSnprintf(outCmdString_, sizeof(outCmdString_), "bs 0 0x200\n");
         }
         else                    // Turn off
         {
-            epicsSnprintf(outCmdString_, sizeof(outCmdString_), "bc 0 0x200\r\n");
+            epicsSnprintf(outCmdString_, sizeof(outCmdString_), "bc 0 0x200\n");
         }
         writeReadMeter();
     }
@@ -265,17 +265,17 @@ asynStatus drvT4U_EM::writeInt32(asynUser *pasynUser, epicsInt32 value)
     {
         if (value)              // Turn on
         {
-            epicsSnprintf(outCmdString_, sizeof(outCmdString_), "bs 0 0x400\r\n");
+            epicsSnprintf(outCmdString_, sizeof(outCmdString_), "bs 0 0x400\n");
         }
         else                    // Turn off
         {
-            epicsSnprintf(outCmdString_, sizeof(outCmdString_), "bc 0 0x400\r\n");
+            epicsSnprintf(outCmdString_, sizeof(outCmdString_), "bc 0 0x400\n");
         }
         writeReadMeter();
     }
     else if (function == P_SampleFreq)
     {
-        epicsSnprintf(outCmdString_, sizeof(outCmdString_), "wr %i %i\r\n",
+        epicsSnprintf(outCmdString_, sizeof(outCmdString_), "wr %i %i\n",
                       REG_T4U_FREQ, value);
         writeReadMeter();
     }
@@ -293,7 +293,7 @@ asynStatus drvT4U_EM::writeInt32(asynUser *pasynUser, epicsInt32 value)
         // Set in the parameter library again, since it may have been changed
         // above.
         status |= setIntegerParam(channel, function, value);
-        epicsSnprintf(outCmdString_, sizeof(outCmdString_), "wr 3 %i\r\n", value);
+        epicsSnprintf(outCmdString_, sizeof(outCmdString_), "wr 3 %i\n", value);
         writeReadMeter();
         
         currRange_ = value;
@@ -302,18 +302,18 @@ asynStatus drvT4U_EM::writeInt32(asynUser *pasynUser, epicsInt32 value)
     {
         int calc_reg = 93; // Base register
         calc_reg = (calc_reg << 16) + 1; // Multiple functions in this register, so set to function 1 for DAC Mode
-        epicsSnprintf(outCmdString_, sizeof(outCmdString_), "wr %i %i\r\n", calc_reg, value);
+        epicsSnprintf(outCmdString_, sizeof(outCmdString_), "wr %i %i\n", calc_reg, value);
         writeReadMeter();
     }
     else if (function == P_PIDEn)
     {
         char *enable_cmd[2] = {"bc", "bs"}; // Off does bc; On does bs
         
-        epicsSnprintf(outCmdString_, sizeof(outCmdString_), "%s 55 1\r\n",
+        epicsSnprintf(outCmdString_, sizeof(outCmdString_), "%s 55 1\n",
                       enable_cmd[value]); // Write to X
         writeReadMeter();
 
-        epicsSnprintf(outCmdString_, sizeof(outCmdString_), "%s 65 1\r\n",
+        epicsSnprintf(outCmdString_, sizeof(outCmdString_), "%s 65 1\n",
                       enable_cmd[value]); // Write to Y
         writeReadMeter();
     }
@@ -332,7 +332,7 @@ asynStatus drvT4U_EM::writeInt32(asynUser *pasynUser, epicsInt32 value)
             mask = HYST_REENABLE_MASK;
         }
 
-        epicsSnprintf(outCmdString_, sizeof(outCmdString_), "%s %i %i\r\n",
+        epicsSnprintf(outCmdString_, sizeof(outCmdString_), "%s %i %i\n",
                       enable_cmd[value], reg, mask); // Write to X
         writeReadMeter();
 
@@ -368,18 +368,18 @@ asynStatus drvT4U_EM::writeFloat64(asynUser *pasynUser, epicsFloat64 value)
     if ((pid_reg = findRegByAsyn(function)) != nullptr)
     {
         int out_val = scaleParamToReg(value, pid_reg);
-        epicsSnprintf(outCmdString_, sizeof(outCmdString_), "wr %i %i\r\n",
+        epicsSnprintf(outCmdString_, sizeof(outCmdString_), "wr %i %i\n",
                       pid_reg->reg_num, out_val);
         writeReadMeter();
     }
     else if (function == P_BiasN_Voltage)
     {
-        epicsSnprintf(outCmdString_, sizeof(outCmdString_), "wr 5 %i\r\n", (int) value);
+        epicsSnprintf(outCmdString_, sizeof(outCmdString_), "wr 5 %i\n", (int) value);
         writeReadMeter();
     }
     else if (function == P_BiasP_Voltage)
     {
-        epicsSnprintf(outCmdString_, sizeof(outCmdString_), "wr 4 %i\r\n", (int) value);
+        epicsSnprintf(outCmdString_, sizeof(outCmdString_), "wr 4 %i\n", (int) value);
         writeReadMeter();
     }
 
