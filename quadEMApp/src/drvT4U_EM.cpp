@@ -995,6 +995,8 @@ int32_t drvT4U_EM::readBroadcastPayload()
     uint32_t u_data;            // Hold the data read from a header
     uint16_t bytes_read;        // Bytes read starting with frame number
     int eomReason;
+    uint16_t payload_len;
+    uint16_t units_current;
 
     // Read second byte of header
     status = readDataParam(1, &c_data, &nRead);
@@ -1003,66 +1005,26 @@ int32_t drvT4U_EM::readBroadcastPayload()
         return -1;              // Report error
     }
 
-    // Read total length
-    status = readDataParam(2, (char *) &bc_hdr_.total_len, &nRead);
-    if (status)                 // Report error
-    {
-        return -1;
-    }
-            
-    // Read frame number
-    status = readDataParam(4, (char *) &bc_hdr_.frame_num, &nRead);
-    if (status)                 // Report error
-    {
-        return -1;
-    }
-    bytes_read += nRead;
-
-    // Read gain
-    status = readDataParam(2, (char *) &bc_hdr_.gain, &nRead);
-    if (status)                 // Report error
-    {
-        return -1;
-    }
-    bytes_read += nRead;
-
-    // Read Decimation
-    status = readDataParam(2, (char *) &bc_hdr_.decimation, &nRead);
-    if (status)                 // Report error
-    {
-        return -1;
-    }
-    bytes_read += nRead;
-
-    // Read Status
-    status = readDataParam(4, (char *) &bc_hdr_.status, &nRead);
+    status = readDataParam(2, (char *) &units_current, &nRead);
     if (status)
     {
         return -1;
     }
-    bytes_read += nRead;
+    bc_hdr_.units = units_current;
     
-    // Read Units
-    status = readDataParam(2, (char *) &bc_hdr_.units, &nRead);
-    if (status)
+    // Read payload length
+    status = readDataParam(2, (char *) &payload_len, &nRead);
+    if (status)                 // Report error
     {
         return -1;
     }
-    bytes_read += nRead;
-
-    // Read Number of Reads
-    status = readDataParam(4, (char *)  &bc_hdr_.num_reads, &nRead);
-    if (status)
-    {
-        return -1;
-    }
-    bytes_read += nRead;
-
+    bc_hdr_.num_reads = payload_len/4/4; // 4 channels * 4 bytes/channel
+            
     // If we made it this far, it is time to read the actual data points.
 
     // First, allocate the buffer
-    nRequest = bc_hdr_.num_reads * 4 * 4; // Four channels * four bytes/channels
-    bc_data_payload_ = new char[bc_hdr_.num_reads * 4 * 4]; // Allocate the memory
+    nRequest = payload_len;                   // Total payload length
+    bc_data_payload_ = new char[payload_len]; // Allocate the memory
 
     if (bc_data_payload_ == nullptr) // Error allocating memory
     {
@@ -1076,22 +1038,10 @@ int32_t drvT4U_EM::readBroadcastPayload()
         //-=-= DEBUGGING
         printf("Error reading data payload: %i.\n", status);
         fflush(stdout);
-        delete bc_data_payload_; // Clear the buffer
+        delete bc_data_payload_; // Free the buffer
         return -1;
     }
 
-    // Now compare the "checksum"
-    nRequest = 1;
-    status = pasynOctetSyncIO->read(pasynUserTCPData_, &c_data, nRequest, 0.01, &nRead, &eomReason);
-    if (status || (c_data != '*'))
-    {
-        //-=-= DEBUGGING
-        printf("Checksum error.\n");
-        fflush(stdout);
-        delete bc_data_payload_; // Clear the buffer
-        return -1;               // Return error
-    }
-    
     return bc_hdr_.num_reads;                   // Return total current readings
 }
 
