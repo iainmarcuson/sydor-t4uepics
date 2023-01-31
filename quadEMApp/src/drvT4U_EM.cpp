@@ -62,6 +62,19 @@
 #define HYST_REENABLE_MASK      0x02
 
 typedef enum {
+    kGET_CMD_NAME,
+    kPARSE_NAME,
+    kPARSE_TR_HDR,
+    kGET_TR_PAYLOAD,
+    kGOT_FULL_TR,
+    kGET_CMD_LEN,
+    kPARSE_ASC_CMD,
+    kEXEC_ASC_CMD,
+    kTR_ERROR,
+    kFLUSH
+} CmdParseState_t;
+
+typedef enum {
   Phase0, 
   Phase1, 
   PhaseBoth
@@ -70,6 +83,8 @@ typedef enum {
 static const char *driverName="drvT4U_EM";
 static void readThread(void *drvPvt);
 static void dataReadThread(void *drvPvt);
+
+static CmdParseState_t parseCmdName(char *cmdName);
 
 
 /** Constructor for the drvT4U_EM class.
@@ -301,8 +316,10 @@ asynStatus drvT4U_EM::writeInt32(asynUser *pasynUser, epicsInt32 value)
     else if (function == P_DACMode)
     {
         int calc_reg = 93; // Base register
-        calc_reg = (calc_reg << 16) + 1; // Multiple functions in this register, so set to function 1 for DAC Mode
-        epicsSnprintf(outCmdString_, sizeof(outCmdString_), "wr %i %i\n", calc_reg, value);
+        // There are multiple functions, so clear out the DAC mode bits and then set them according to the mode
+        epicsSnprintf(outCmdString_, sizeof(outCmdString_), "bc %i %i\n", calc_reg, OUTPUT_MODE_MASK);
+        writeReadMeter();
+        epicsSnprintf(outCmdString_, sizeof(outCmdString_), "bs %i %i\n", calc_reg, value & OUTPUT_MODE_MASK);
         writeReadMeter();
     }
     else if (function == P_PIDEn)
@@ -471,81 +488,197 @@ void drvT4U_EM::cmdReadThread(void)
     size_t nRead;
     int eomReason;
     int i;
-    char InData[MAX_COMMAND_LEN];
+    static char InData[MAX_COMMAND_LEN]; // Hold either an ASCII command or the header of a new command
+    char *inTr;                   // Hold the payload of a tr command
+    char currChar;
     size_t nRequest = 1;
     int processRet;
     static const char *functionName = "cmdReadThread";
+    CmdParseState_t parseState = kGET_CMD_NAME;
 
     status = asynSuccess;       // -=-= FIXME Used for a different call
 
     // Loop forever
     lock();
-    while(1)
+    while(1)                    // The main loop of receving commands
     {
         int totalBytesRead;
+        int headerBytes;
         bool commandReceived;
         unlock();
         epicsThreadSleep(0.001);
         totalBytesRead = 0;
         memset(InData, '\0', MAX_COMMAND_LEN);
         commandReceived = false; // No proper command recieved yet
+        uint16_t tr_len;
+        uint16_t reg_num;
+        uint32_t reg_val;
+        bool nonWhite = false;
+        nRequest = 1;           // Always request one byte at the start
         while (1)
         {
-            status = pasynOctetSyncIO->read(pasynUserTCPCommand_, InData+totalBytesRead, nRequest, T4U_EM_TIMEOUT, &nRead, &eomReason);
-            if (nRead == 1) // Read a byte successfully
-            {
-                totalBytesRead++;
-                if (*(InData+totalBytesRead-1) == '\n') // End of a command
-                {
-                    commandReceived = true;
-                    break;      // Break to parse the command
-                }
 
-                if (totalBytesRead >= (MAX_COMMAND_LEN -1)) // Too long
+            if (parseState == kGET_CMD_NAME)
+            {
+                int charRead = 0;
+                nonWhite = false; // No non-white at start
+                while(1)
                 {
-                    break;
-                }
+                    status = pasynOctetSyncIO->read(pasynUserTCPCommand_, &currChar, nRequest, T4U_EM_TIMEOUT, &nRead, &eomReason); // Start by reading in a byte
+                    if (nRead == 0)     // No bytes available
+                    {
+                        continue;
+                    }
+
+                    if ((nonWhite == false) && isspace(currChar)) // Skip whitespace if we haven't already read a non-space character
+                    {
+                        continue;
+                    }
+
+                    nonWhite = true; // Flag that received a no
+                    InData[charRead] = currChar;
+                    charRead++;
+
+                    if (charRead == 2) // Read a full command name
+                    {
+                        parseState = kPARSE_NAME; // Move to parsing name
+                        totalBytesRead = 2;       // Two data bytes in InData
+                        break;
+                    }
+                } // while(1) Socket reading loop
+            } // if parseState = kGET_CMD_NAME
+
+            if (parseState == kPARSE_NAME)
+            {
+                parseState = parseCmdName(InData);
             }
-            else                // No byte read -- assume an error
+
+            if (parseState == kPARSE_ASC_CMD)
+            {
+                while (1)       // Loop until command or error
+                {
+                    status = pasynOctetSyncIO->read(pasynUserTCPCommand_, InData+totalBytesRead, nRequest, T4U_EM_TIMEOUT, &nRead, &eomReason); // Append a byte to the command name we already have
+
+                    if (nRead == 0) // Didn't read a byte
+                    {
+                        continue; // Try again
+                    }
+                
+                    totalBytesRead++;
+                    if (*(InData+totalBytesRead-1) == '\n') // End of a command
+                    {
+                        parseState = kEXEC_ASC_CMD; // Not a full command received
+                        break;
+                    }
+  
+                    if (totalBytesRead >= (MAX_COMMAND_LEN -1)) // Too long
+                    {
+                        parseState =  kFLUSH;
+                        break;
+                    }
+                } // Loop reading command bytes
+            } // if parsing command
+
+            if (parseState == kEXEC_ASC_CMD) // Executing an ASCII command
+            {
+                break;          //-=-= The actual execution would follow the break outside of the loop when we can lock.
+            }
+
+            if (parseState == kPARSE_TR_HDR)
+            {
+                // First we have to read the length
+                nRequest = 2;   // Two byte length
+                status = pasynOctetSyncIO->read(pasynUserTCPCommand_, (char *) &tr_len, nRequest, T4U_EM_TIMEOUT, &nRead, &eomReason); // Read the header length
+                if (nRead != 2) // Didn't read whole length
+                {
+                    parseState = kFLUSH;
+                }
+                else            // Read whole length
+                {
+                    tr_len = ntohs(tr_len); // Sent big-endian
+                    parseState = kGET_TR_PAYLOAD;
+                }
+            } // if parse TR_HDR
+
+            if (parseState == kGET_TR_PAYLOAD)
+            {
+                inTr = new char[tr_len];
+                if (inTr == nullptr)
+                {
+                    printf("Failed to allocate memory for TR payload.\n");
+                    fflush(stdout);
+                    parseState = kTR_ERROR; // Flag there was an error here
+                }
+                else            // Allocated memory
+                {
+                    nRequest = tr_len;   // Two byte length
+                    status = pasynOctetSyncIO->read(pasynUserTCPCommand_, inTr, nRequest, T4U_EM_TIMEOUT, &nRead, &eomReason); // Append a byte to the command name we alreay have
+                    if (nRead != nRequest) // Didn't read all bytes
+                    {
+                        parseState = kFLUSH;
+                    }
+                    else
+                    {
+                        parseState = kGOT_FULL_TR; // Flag so that we can parse the results
+                    }
+                } // memory alocated
+                break;
+            } // if kGET_TR_PAYLOAD
+
+            if ((parseState == kFLUSH) || (parseState == kTR_ERROR)) // An error condition
             {
                 break;
             }
         }
         lock();
-        
-        if (commandReceived)    //  We got a valid command
+
+        if (parseState == kEXEC_ASC_CMD) // We received an ASCII command to parse
         {
-            //-=-= DEBUGGING
-            printf("Received command: %s\n", InData);
-            fflush(stdout);
-            
-            processRet = processReceivedCommand(InData); // Process it
-            
-            if (processRet < 0) // Some variety of error
+            //-=-= FIXME TODO Decide if we want to support this
+        }
+        else if (parseState == kFLUSH) // We had an error somewhere
+        {
+            unlock();
+            pasynOctetSyncIO->flush(pasynUserTCPCommand_); // Flush the socket
+            lock();
+        }
+        else if (parseState == kTR_ERROR) // An error in TR handling
+        {
+            // Don't do anything, since there was no problem with the command
+        }
+        else if (parseState == kGOT_FULL_TR)
+        {
+            // Now we will have to iterate over each register in the tr payload
+            int tr_reg_count = tr_len / 6;
+            int tr_idx;
+            int process_ret;
+            for (tr_idx = 0 ; tr_idx < tr_reg_count; tr_idx++)
             {
-                if (processRet == -1) // Unknown register
+                reg_num = *((uint16_t *)&inTr[tr_idx*6]);
+                reg_val = *((uint32_t *)&inTr[tr_idx*6+2]);
+                //-=-= XXX Sent little-endian
+                //reg_num = ntohs(reg_num); // Sent big-endian
+                //reg_val = ntohl(reg_val);
+
+                // Now that we have the register number and value, we need to update the PVs
+                //-=-= DEBUGGING
+                printf("Processing reg %3i\n", (int) reg_num);
+                fflush(stdout);
+                //-=-= TODO XXX We need to be able to send int, but sometimes we want to treat it as unsigned
+                process_ret = processRegVal(reg_num, reg_val);
+                if (process_ret == 0)
                 {
-                    printf("Error parsing: %s\nUnknown register.\n", InData);
+                    printf("Processed reg %3i Value: %10i\n", (int) reg_num, (int) reg_val);
                     fflush(stdout);
                 }
-                else
-                {
-                    printf("Unknown error parsing: %s\b", InData);
-                    fflush(stdout);
-                }      
-            }
-        }
-        else                    // We did not get a full command one way or another
-        {
-            if (totalBytesRead > 0) // Read part of a command
-            {
-                unlock();
-                status = pasynOctetSyncIO->flush(pasynUserTCPCommand_); // Flush the buffer and try again
-                lock();
-            }
-        }    
-        
-    }
+            } // for tr_idx over all returned tr values
+            delete inTr;
+        } // if got_full_tr
+
+        // Set the state for looking for a header again
+        parseState = kGET_CMD_NAME;
+                
+    } // while main receiving loop
     return;
 }
 
@@ -671,7 +804,6 @@ int32_t drvT4U_EM::processReceivedCommand(char *cmdString)
 {
     int32_t reg_num, reg_val;
     int args_parsed;
-    T4U_Reg_T *pid_reg;
 
     // We only accept rr commands.
     args_parsed = sscanf(cmdString, " rr %i %i\n", &reg_num, &reg_val);
@@ -680,7 +812,13 @@ int32_t drvT4U_EM::processReceivedCommand(char *cmdString)
     {
         return 1;              // We don't handle the command, but that is possibly okay, since it could be e.g. a valid "bs" command
     }
+    return processRegVal(reg_num, reg_val);
+}
 
+int drvT4U_EM::processRegVal(int reg_num, int reg_val)
+{
+    T4U_Reg_T *pid_reg;
+    
     pid_reg = findRegByNum(reg_num); // See if this is a PID register that needs scaling
 
     if (pid_reg)                // It is a PID register
@@ -1067,6 +1205,37 @@ void dataReadThread(void *drvPvt)
     pPvt->dataReadThread();
 }
 
+
+CmdParseState_t parseCmdName(char *cmdName)
+{
+    CmdParseState_t parseState;
+    if (strcmp(cmdName, "tr") == 0)
+    {
+        parseState = kPARSE_TR_HDR;
+    }
+    else if (strcmp(cmdName, "wr") == 0)
+    {
+        parseState = kPARSE_ASC_CMD;
+    }
+    else if (strcmp(cmdName, "rr") == 0)
+    {
+        parseState = kPARSE_ASC_CMD;
+    }
+    else if (strcmp(cmdName, "bc") == 0)
+    {
+        parseState = kPARSE_ASC_CMD;
+    }
+    else if (strcmp(cmdName, "bs") == 0)
+    {
+        parseState = kPARSE_ASC_CMD;
+    }
+    else                        // An unknown command
+    {
+        parseState = kFLUSH;    // Invalid command, so flush the socket
+    }
+
+    return parseState;
+}
 
 extern "C" {
 

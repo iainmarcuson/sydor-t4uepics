@@ -125,6 +125,7 @@ private:
     double scaleParamToReg(double value, const T4U_Reg_T *reg_info, bool clip = false);
     double rawToCurrent(int rawVal);
     int32_t processReceivedCommand(char *cmdString);
+    int32_t processRegVal(int reg_num, int reg_val);
     asynStatus readDataParam(size_t nRequest, char *dest, size_t *nRead);
     int32_t readBroadcastPayload();
 };
