@@ -29,9 +29,13 @@
 #define P_BiasN_Voltage_String "QE_BIAS_N_VOLTAGE"
 #define P_BiasP_Voltage_String "QE_BIAS_P_VOLTAGE"
 #define P_DACMode_String "QE_DAC_MODE"
+#define P_PosTrackMode_String "QE_POS_TRACK_MODE"
 #define P_PIDEn_String "QE_PID_EN"
 #define P_PIDCuEn_String "QE_PID_CU_EN"
 #define P_PIDHystEn_String "QE_PID_HYST_EN"
+#define P_PIDCtrlPol_String "QE_PID_POL"
+#define P_PIDCtrlEx_String "QE_PID_EXT_CTRL"
+
 #include "gc_t4u_hdr_string.h"
 
 typedef struct {
@@ -78,9 +82,12 @@ protected:
     int P_BiasP_Voltage;
     int P_SampleFreq;
     int P_DACMode;
+    int P_PosTrackMode;
     int P_PIDEn;
     int P_PIDCuEn;
     int P_PIDHystEn;
+    int P_PIDCtrlPol;
+    int P_PIDCtrlEx;
 #include "gc_t4u_hdr_member.h"
 
     /* These are the methods we implement from quadEM */

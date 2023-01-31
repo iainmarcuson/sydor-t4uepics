@@ -146,6 +146,49 @@ record(bi, "$(P)$(R)PIDEn_RBV")
 }
 
 #------------------
+# PID Countrol
+#------------------
+
+record(bo, "$(P)$(R)PIDCtrlPol")
+{
+    field(DESC, "PID Control Polarity")
+    field(ZNAM, "Active HI")
+    field(ONAM, "Active LOW")
+    field(DTYP, "asynInt32")
+    field(OUT, "@asyn($(PORT) 0)QE_PID_POL")
+}
+
+record(bi, "$(P)$(R)PIDCtrlPol_RBV")
+{
+    field(DESC, "PID Control Polarity")
+    field(ZNAM, "Active HI")
+    field(ONAM, "Active LOW")
+    field(DTYP, "asynInt32")
+    field(INP, "@asyn($(PORT) 0)QE_PID_POL")
+    field(SCAN, "I/O Intr")
+}
+
+record(bo, "$(P)$(R)PIDCtrlEx")
+{
+    field(DESC, "PID External Control")
+    field(ZNAM, "No External Control")
+    field(ONAM, "GPI1")
+    field(DTYP, "asynInt32")
+    field(OUT, "@asyn($(PORT) 0)QE_PID_EXT_CTRL")
+}
+
+record(bi, "$(P)$(R)PIDCtrlEx_RBV")
+{
+    field(DESC, "PID Control Polarity")
+    field(ZNAM, "No External Control")
+    field(ONAM, "GPI1")
+    field(DTYP, "asynInt32")
+    field(INP, "@asyn($(PORT) 0)QE_PID_EXT_CTRL")
+    field(SCAN, "I/O Intr")
+}
+
+
+#------------------
 # Cutout PVs
 #------------------
 
@@ -186,6 +229,40 @@ record(bi, "$(P)$(R)PIDHystEn_RBV")
     field(INP, "@asyn($(PORT) 0)QE_PID_HYST_EN")
     field(SCAN, "I/O Intr")
 }
+
+#------------------------
+# Position Tracking
+#------------------------
+
+record(mbbo, "$(P)$(R)PosTrackMode")
+{
+    field(ZRST, "None")
+    field(ZRVL, "0")
+    field(ONST, "Active HI")
+    field(ONVL, "1")
+    field(TWST, "Active LOW")
+    field(TWVL, "2")
+    field(THST, "Reserved")
+    field(THVL, "3")
+    field(DTYP, "asynInt32")
+    field(OUT, "@asyn($(PORT) 0)QE_POS_TRACK_MODE")
+}
+
+record(mbbi, "$(P)$(R)PosTrackMode_RBV")
+{
+    field(ZRST, "None")
+    field(ZRVL, "0")
+    field(ONST, "Active HI")
+    field(ONVL, "1")
+    field(TWST, "Active LOW")
+    field(TWVL, "2")
+    field(THST, "Reserved")
+    field(THVL, "3")
+    field(DTYP, "asynInt32")
+    field(INP, "@asyn($(PORT) 0)QE_POS_TRACK_MODE")
+    field(SCAN, "I/O Intr")
+}
+
 
 #------------------------
 # Sampling Frequency

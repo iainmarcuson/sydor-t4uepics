@@ -50,16 +50,17 @@
 #define RANGE_SEL_MASK          0x3
 #define RANGE_AUTO_MASK         (1<<7)
 
-#define REG_PIDX_CTRL           55
-#define REG_PIDY_CTRL           65
-#define PID_EN_MASK             0x1
-
+#define REG_PID_CTRL            19
+#define PID_EN_MASK             0x4
+#define PID_CUTOUT_EN_MASK      0x2
+#define PID_HYST_REENABLE_MASK  0x1
+#define PID_POS_TRACK_MASK      0x3
+#define PID_POS_TRACK_SHIFT     3
+#define PID_CTRL_POL_MASK       0x40
+#define PID_EXT_CTRL_MASK       0x80
 #define REG_OUTPUT_MODE         93
 #define OUTPUT_MODE_MASK        0x7
 
-#define REG_PID_CUTOUT_MODE     94
-#define CUTOUT_ENABLE_MASK      0x01
-#define HYST_REENABLE_MASK      0x02
 
 typedef enum {
     kGET_CMD_NAME,
@@ -131,9 +132,12 @@ drvT4U_EM::drvT4U_EM(const char *portName, const char *qtHostAddress, int ringBu
     createParam(P_BiasP_Voltage_String, asynParamFloat64, &P_BiasP_Voltage);
     createParam(P_SampleFreq_String, asynParamInt32, &P_SampleFreq);
     createParam(P_DACMode_String, asynParamInt32, &P_DACMode);
+    createParam(P_PosTrackMode_String, asynParamInt32, &P_PosTrackMode);
     createParam(P_PIDEn_String, asynParamInt32, &P_PIDEn);
     createParam(P_PIDCuEn_String, asynParamInt32, &P_PIDCuEn);
     createParam(P_PIDHystEn_String, asynParamInt32, &P_PIDHystEn);
+    createParam(P_PIDCtrlPol_String, asynParamInt32, &P_PIDCtrlPol);
+    createParam(P_PIDCtrlEx_String, asynParamInt32, &P_PIDCtrlEx);
     
 #include "gc_t4u_cpp_params.cpp"
     
@@ -325,34 +329,56 @@ asynStatus drvT4U_EM::writeInt32(asynUser *pasynUser, epicsInt32 value)
     else if (function == P_PIDEn)
     {
         char *enable_cmd[2] = {"bc", "bs"}; // Off does bc; On does bs
-        
-        epicsSnprintf(outCmdString_, sizeof(outCmdString_), "%s 55 1\n",
-                      enable_cmd[value]); // Write to X
-        writeReadMeter();
 
-        epicsSnprintf(outCmdString_, sizeof(outCmdString_), "%s 65 1\n",
-                      enable_cmd[value]); // Write to Y
+        epicsSnprintf(outCmdString_, sizeof(outCmdString_), "%s %i %i\n",
+                      enable_cmd[value], REG_PID_CTRL, PID_EN_MASK);
         writeReadMeter();
     }
-    else if ((function == P_PIDCuEn) || (function == P_PIDHystEn))
+    else if ((function == P_PIDCuEn) || (function == P_PIDHystEn)
+             || (function == P_PIDCtrlPol) || (function == P_PIDCtrlEx))
     {
         char *enable_cmd[2] = {"bc", "bs"}; // Off does bc; on does bs.
-        int reg = REG_PID_CUTOUT_MODE;
+        int reg = REG_PID_CTRL;
         int mask;
 
         if (function == P_PIDCuEn)
         {
-            mask = CUTOUT_ENABLE_MASK;
+            mask = PID_CUTOUT_EN_MASK;
         }
-        else
+        else if (function == P_PIDHystEn)
         {
-            mask = HYST_REENABLE_MASK;
+           mask = PID_HYST_REENABLE_MASK;
         }
+        else if (function == P_PIDCtrlPol)
+        {
+            mask = PID_CTRL_POL_MASK;
+        }
+        else // (function == P_PIDCtrlEx)
+        {
+            mask = PID_EXT_CTRL_MASK;
+        }
+        
 
         epicsSnprintf(outCmdString_, sizeof(outCmdString_), "%s %i %i\n",
                       enable_cmd[value], reg, mask); // Write to X
         writeReadMeter();
 
+    }
+    else if (function == P_PosTrackMode)
+    {
+        //-=-= XXX The shift amount may 
+        int reg = REG_PID_CTRL;
+        int shift_mask = PID_POS_TRACK_MASK << PID_POS_TRACK_SHIFT;
+        int shift_val = (value & PID_POS_TRACK_MASK) << PID_POS_TRACK_SHIFT;
+
+        // First clear the exist position bits
+        epicsSnprintf(outCmdString_, sizeof(outCmdString_), "bc %i %i\n",
+                      reg, shift_mask);
+        writeReadMeter();
+        // Now set the bits to the selected value
+        epicsSnprintf(outCmdString_, sizeof(outCmdString_), "bs %i %i\n",
+                      reg, shift_val);
+        writeReadMeter();
     }
 
     printf("About to return from %s\n", functionName);
@@ -863,15 +889,6 @@ int drvT4U_EM::processRegVal(int reg_num, int reg_val)
             int range_val = reg_val & RANGE_SEL_MASK;
             setIntegerParam(P_Range, range_val);
         }
-        else if (reg_num == REG_PIDX_CTRL) // PID X control -- assumed same as PID Y
-        {
-            int enable_val = reg_val & PID_EN_MASK;
-            setIntegerParam(P_PIDEn, enable_val);
-        }
-        else if (reg_num == REG_PIDY_CTRL) // Assumed same as PID X, so swallow
-        {
-            // Just swallow it.
-        }
         else if (reg_num == REG_OUTPUT_MODE)
         {
             //-=-= TODO PID Inhibit, External Trigger Enable, and Calc Mode
@@ -879,26 +896,31 @@ int drvT4U_EM::processRegVal(int reg_num, int reg_val)
             int dac_mode = reg_val & OUTPUT_MODE_MASK;
             setIntegerParam(P_DACMode, dac_mode);
         }
-        else if (reg_num == REG_PID_CUTOUT_MODE)
+        else if (reg_num == REG_PID_CTRL)
         {
-            if (reg_val & CUTOUT_ENABLE_MASK)
-            {
-                setIntegerParam(P_PIDCuEn, 1);
-            }
-            else
-            {
-                setIntegerParam(P_PIDCuEn, 0);
-            }
+            uint32_t calc_val;
+            
+            calc_val = (reg_val & PID_CUTOUT_EN_MASK) ? 1 : 0;
+            setIntegerParam(P_PIDCuEn, calc_val);
 
-            if (reg_val & HYST_REENABLE_MASK)
-            {
-                setIntegerParam(P_PIDHystEn, 1);
-            }
-            else
-            {
-                setIntegerParam(P_PIDHystEn, 0);
-            }
+            calc_val = (reg_val & PID_HYST_REENABLE_MASK) ? 1 : 0;
+            setIntegerParam(P_PIDHystEn, calc_val);
+
+            calc_val = (reg_val & PID_EN_MASK) ? 1 : 0;
+            setIntegerParam(P_PIDEn, calc_val);
+
+            calc_val = (reg_val & PID_CTRL_POL_MASK) ? 1 : 0;
+            setIntegerParam(P_PIDCtrlPol, calc_val);
+
+            calc_val = (reg_val & PID_EXT_CTRL_MASK) ? 1 : 0;
+            setIntegerParam(P_PIDCtrlEx, calc_val);
+
+            calc_val = (reg_val >> PID_POS_TRACK_SHIFT) & PID_POS_TRACK_MASK;
+            setIntegerParam(P_PosTrackMode, calc_val);
+
+            
         }
+                            
         else                    // An unhandled command
         {
             return -1;          // Flag an error
