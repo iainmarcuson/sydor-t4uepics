@@ -888,6 +888,7 @@ int drvT4U_EM::processRegVal(int reg_num, int reg_val)
             //-=-= TODO We may incorporate autorange later
             int range_val = reg_val & RANGE_SEL_MASK;
             setIntegerParam(P_Range, range_val);
+            currRange_ = range_val;
         }
         else if (reg_num == REG_OUTPUT_MODE)
         {
