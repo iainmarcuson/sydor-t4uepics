@@ -23,3 +23,6 @@ PID_Hyst, f64, QE_PID_HYST, PID_HystString, P_PIDHyst, 0, 1.0, 0, 1000.0, 91
 # DAC Current to Voltage -=-= FIXME Find out the desired scale factor
 DACItoV, f64, QE_DAC_ITOV, DAC_ItoVString, P_DACItoV, 0, 1.0, 0, 1.0, 92
 DACItoVOffset, f64, QE_DAC_ITOV_OFFSET, DAC_ItoVOffsetString, P_DACItoVOffset, 0, 10.0, 0, 100000.0, 76
+
+# Position Tracking Radium
+PosTrackRad, f64, QE_POS_TRACK_RAD, PosTrackRadString, P_PosTrackRad, -1.0, 1.0, -10000.0, 10000.0, 20
