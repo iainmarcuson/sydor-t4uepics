@@ -146,7 +146,7 @@ record(bi, "$(P)$(R)PIDEn_RBV")
 }
 
 #------------------
-# PID Countrol
+# PID Control
 #------------------
 
 record(bo, "$(P)$(R)PIDCtrlPol")
@@ -270,16 +270,16 @@ record(mbbi, "$(P)$(R)PosTrackMode_RBV")
 
 record(longout, "$(P)$(R)SampleFreq")
 {
-    field(DESC, "T4U Sampling Frequency")
+    field(DESC, "T4U Decimation Frequency")
     field(DTYP, "asynInt32")
     field(OUT, "@asyn($(PORT) 0)QE_SAMPLE_FREQ")
-    field(VAL, "4500")
-    field(PINI, "YES")
+    field(VAL, "10000")
+    field(PINI, "NO")
 }
 
 record(longin, "$(P)$(R)SampleFreq_RBV")
 {
-    field(DESC, "T4U Sampling Frequency")
+    field(DESC, "T4U Decimation Frequency")
     field(DTYP, "asynInt32")
     field(INP, "@asyn($(PORT) 0)QE_SAMPLE_FREQ")
     field(SCAN, "I/O Intr")
