@@ -118,6 +118,8 @@ private:
     char outCmdString_[MAX_COMMAND_LEN];
     char inCmdString_[MAX_COMMAND_LEN];
     double readCurr_[MAX_CHAN_READS*4]; // The values read from the socket
+    double calSlope_[4];
+    double calOffset_[4];
     int currRange_;
     char *bc_data_payload_;      // Broadcast data payload
     T4U_Payload_Header_T bc_hdr_; // Broadcast data header
@@ -132,7 +134,7 @@ private:
     double scaleParamToReg(double value, const T4U_Reg_T *reg_info, bool clip = false);
     double rawToCurrent(int rawVal);
     int32_t processReceivedCommand(char *cmdString);
-    int32_t processRegVal(int reg_num, int reg_val);
+    int32_t processRegVal(int reg_num, uint32_t reg_val);
     asynStatus readDataParam(size_t nRequest, char *dest, size_t *nRead);
     int32_t readBroadcastPayload();
 };

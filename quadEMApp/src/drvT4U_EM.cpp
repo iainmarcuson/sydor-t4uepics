@@ -61,6 +61,15 @@
 #define REG_OUTPUT_MODE         93
 #define OUTPUT_MODE_MASK        0x7
 
+#define TXC_CHA_CALIB_SLOPE     100
+#define TXC_CHB_CALIB_SLOPE     101
+#define TXC_CHC_CALIB_SLOPE     102
+#define TXC_CHD_CALIB_SLOPE     103
+
+#define TXC_CHA_CALIB_OFFSET    104
+#define TXC_CHB_CALIB_OFFSET    105
+#define TXC_CHC_CALIB_OFFSET    106
+#define TXC_CHD_CALIB_OFFSET    107
 
 typedef enum {
     kGET_CMD_NAME,
@@ -113,7 +122,6 @@ drvT4U_EM::drvT4U_EM(const char *portName, const char *qtHostAddress, int ringBu
     // Set a range index to a default
     currRange_ = 0;
     // Range scale factors
-    //-=-=TODO Put in actual numbers
     ranges_[0]=5e6;
     ranges_[1]=14955.12;
     ranges_[2]=47.0;
@@ -122,6 +130,16 @@ drvT4U_EM::drvT4U_EM(const char *portName, const char *qtHostAddress, int ringBu
     ranges_[5]=1.0;
     ranges_[6]=1.0;
     ranges_[7]=1.0;
+
+    // Calibration default values
+    calSlope_[0] = 1.0;
+    calSlope_[1] = 1.0;
+    calSlope_[2] = 1.0;
+    calSlope_[3] = 1.0;
+    calOffset_[0] = 0.0;
+    calOffset_[1] = 0.0;
+    calOffset_[2] = 0.0;
+    calOffset_[3] = 0.0;
     
     acquireStartEvent_ = epicsEventCreate(epicsEventEmpty);
 
@@ -694,7 +712,7 @@ void drvT4U_EM::cmdReadThread(void)
                 process_ret = processRegVal(reg_num, reg_val);
                 if (process_ret == 0)
                 {
-                    printf("Processed reg %3i Value: %10i\n", (int) reg_num, (int) reg_val);
+                    printf("Processed reg %3i Value: %10i 0x%08x\n", (int) reg_num, (int) reg_val, (int) reg_val);
                     fflush(stdout);
                 }
             } // for tr_idx over all returned tr values
@@ -799,10 +817,10 @@ void drvT4U_EM::dataReadThread(void)
                     }
                     else // Reading raw values
                     {
-                        read_vals[0] = rawToCurrent(curr_raw[0]);
-                        read_vals[1] = rawToCurrent(curr_raw[1]);
-                        read_vals[2] = rawToCurrent(curr_raw[2]);
-                        read_vals[3] = rawToCurrent(curr_raw[3]);
+                        read_vals[0] = (rawToCurrent(curr_raw[0])-calOffset_[0]) / calSlope_[0];
+                        read_vals[1] = (rawToCurrent(curr_raw[1])-calOffset_[1]) / calSlope_[1];
+                        read_vals[2] = (rawToCurrent(curr_raw[2])-calOffset_[2]) / calSlope_[2];
+                        read_vals[3] = (rawToCurrent(curr_raw[3])-calOffset_[3]) / calSlope_[3];
                     }
                     curr_raw += 4;
                     
@@ -841,7 +859,7 @@ int32_t drvT4U_EM::processReceivedCommand(char *cmdString)
     return processRegVal(reg_num, reg_val);
 }
 
-int drvT4U_EM::processRegVal(int reg_num, int reg_val)
+int drvT4U_EM::processRegVal(int reg_num, uint32_t reg_val)
 {
     T4U_Reg_T *pid_reg;
     
@@ -921,7 +939,20 @@ int drvT4U_EM::processRegVal(int reg_num, int reg_val)
 
             
         }
-                            
+        else if ((reg_num >= TXC_CHA_CALIB_SLOPE) && (reg_num <= TXC_CHD_CALIB_SLOPE))
+        {
+            double slope_val;
+
+            slope_val = (double) (*((float *) &reg_val));
+            calSlope_[reg_num - TXC_CHA_CALIB_SLOPE] = slope_val;
+        }
+        else if ((reg_num >= TXC_CHA_CALIB_OFFSET) && (reg_num <= TXC_CHD_CALIB_OFFSET))
+        {
+            double offset_val;
+
+            offset_val = (double) (*((float *) &reg_val));
+            calOffset_[reg_num - TXC_CHA_CALIB_OFFSET] = offset_val;
+        }
         else                    // An unhandled command
         {
             return -1;          // Flag an error
@@ -1029,6 +1060,15 @@ int32_t drvT4U_EM::readBroadcastPayload()
 
     if (bc_data_payload_ == nullptr) // Error allocating memory
     {
+        //-=-= DEBUGGING
+        printf("nullptr Null pointer for data payload.\n");
+        return -1;
+    }
+
+    if (bc_data_payload_ == NULL)
+    {
+        //-=-= DEBUGGING
+        printf("NULL value pointer for data payload.\n");
         return -1;
     }
 
