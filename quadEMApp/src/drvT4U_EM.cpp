@@ -43,7 +43,9 @@
 #define REG_T4U_CTRL            0
 #define BIAS_N_EN_MASK          (1<<9)
 #define BIAS_P_EN_MASK          (1<<10)
-
+#define PULSE_BIAS_EN_MASK      (1<<18)
+#define PULSE_BIAS_OFF_REG      22
+#define PULSE_BIAS_ON_REG       23
 #define REG_T4U_FREQ            1
 
 #define REG_T4U_RANGE           3
@@ -148,6 +150,9 @@ drvT4U_EM::drvT4U_EM(const char *portName, const char *qtHostAddress, int ringBu
     createParam(P_BiasP_En_String, asynParamInt32, &P_BiasP_En);
     createParam(P_BiasN_Voltage_String, asynParamFloat64, &P_BiasN_Voltage);
     createParam(P_BiasP_Voltage_String, asynParamFloat64, &P_BiasP_Voltage);
+    createParam(P_PulseBias_En_String, asynParamInt32, &P_PulseBias_En);
+    createParam(P_PulseBias_OffCnt_String, asynParamInt32, &P_PulseBias_OffCnt);
+    createParam(P_PulseBias_OnCnt_String, asynParamInt32, &P_PulseBias_OnCnt);
     createParam(P_SampleFreq_String, asynParamInt32, &P_SampleFreq);
     createParam(P_DACMode_String, asynParamInt32, &P_DACMode);
     createParam(P_PosTrackMode_String, asynParamInt32, &P_PosTrackMode);
@@ -308,6 +313,30 @@ asynStatus drvT4U_EM::writeInt32(asynUser *pasynUser, epicsInt32 value)
         {
             epicsSnprintf(outCmdString_, sizeof(outCmdString_), "bc 0 0x400\n");
         }
+        writeReadMeter();
+    }
+    else if (function == P_PulseBias_En)
+    {
+        if (value)              // Turn on
+        {
+            epicsSnprintf(outCmdString_, sizeof(outCmdString_), "bs 0 %i\n", (int) PULSE_BIAS_EN_MASK);
+        }
+        else                    // Turn off
+        {
+            epicsSnprintf(outCmdString_, sizeof(outCmdString_), "bc 0 %i\n", (int) PULSE_BIAS_EN_MASK);
+        }
+        writeReadMeter();
+    }
+    else if (function == P_PulseBias_OffCnt)
+    {
+        epicsSnprintf(outCmdString_, sizeof(outCmdString_), "wr %i %i\n",
+                      (int) PULSE_BIAS_OFF_REG, value);
+        writeReadMeter();
+    }
+    else if (function == P_PulseBias_OnCnt)
+    {
+        epicsSnprintf(outCmdString_, sizeof(outCmdString_), "wr %i %i\n",
+                      (int) PULSE_BIAS_ON_REG, value);
         writeReadMeter();
     }
     else if (function == P_SampleFreq)
@@ -896,10 +925,23 @@ int drvT4U_EM::processRegVal(int reg_num, uint32_t reg_val)
             {
                 setIntegerParam(P_BiasP_En, 0);
             }
+            
+            if (reg_val & PULSE_BIAS_EN_MASK)
+            {
+                setIntegerParam(P_PulseBias_En, 1);
+            }
+            else
+            {
+                setIntegerParam(P_PulseBias_En, 0);
+            }
         }
         else if (reg_num == REG_T4U_FREQ)
         {
+            double sample_time;
             setIntegerParam(P_SampleFreq, reg_val);
+            sample_time = 1.0/reg_val;
+            setDoubleParam(P_SampleTime, sample_time);
+            setDoubleParam(P_AveragingTime, sample_time);
         }
         else if (reg_num == REG_T4U_RANGE)
         {
@@ -907,6 +949,14 @@ int drvT4U_EM::processRegVal(int reg_num, uint32_t reg_val)
             int range_val = reg_val & RANGE_SEL_MASK;
             setIntegerParam(P_Range, range_val);
             currRange_ = range_val;
+        }
+        else if (reg_num == PULSE_BIAS_OFF_REG)
+        {
+            setIntegerParam(P_PulseBias_OffCnt, reg_val);
+        }
+        else if (reg_num == PULSE_BIAS_ON_REG)
+        {
+            setIntegerParam(P_PulseBias_OnCnt, reg_val);
         }
         else if (reg_num == REG_OUTPUT_MODE)
         {

@@ -28,6 +28,9 @@
 #define P_BiasP_En_String "QE_BIAS_P"
 #define P_BiasN_Voltage_String "QE_BIAS_N_VOLTAGE"
 #define P_BiasP_Voltage_String "QE_BIAS_P_VOLTAGE"
+#define P_PulseBias_En_String "QE_PULSE_BIAS"
+#define P_PulseBias_OffCnt_String "QE_PULSE_BIAS_OFF"
+#define P_PulseBias_OnCnt_String "QE_PULSE_BIAS_ON"
 #define P_DACMode_String "QE_DAC_MODE"
 #define P_PosTrackMode_String "QE_POS_TRACK_MODE"
 #define P_PIDEn_String "QE_PID_EN"
@@ -80,6 +83,9 @@ protected:
     int P_BiasP_En;
     int P_BiasN_Voltage;
     int P_BiasP_Voltage;
+    int P_PulseBias_En;
+    int P_PulseBias_OffCnt;
+    int P_PulseBias_OnCnt;
     int P_SampleFreq;
     int P_DACMode;
     int P_PosTrackMode;

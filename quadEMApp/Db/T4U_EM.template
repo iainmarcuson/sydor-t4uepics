@@ -77,6 +77,66 @@ record(ai, "$(P)$(R)BiasNVoltage_RBV")
     field(SCAN, "I/O Intr")
 }
 
+#---------------------
+# Pulse Bias Options 
+#---------------------
+
+record(bo, "$(P)$(R)PulseBiasEn")
+{
+    field(DESC, "Pulse Bias Enable")
+    field(ZNAM, "Disable")
+    field(ONAM, "Enable")
+    field(VAL, "0")
+    field(PINI, "YES")
+    field(DTYP, "asynInt32")
+    field(OUT, "@asyn($(PORT) 0)QE_PULSE_BIAS")
+}
+
+record(bi, "$(P)$(R)PulseBiasEn_RBV")
+{
+    field(DESC, "Pulse Bias Enable")
+    field(ZNAM, "Disable")
+    field(ONAM, "Enable")
+    field(DTYP, "asynInt32")
+    field(INP, "@asyn($(PORT) 0)QE_PULSE_BIAS")
+    field(SCAN, "I/O Intr")
+}
+
+record(longout, "$(P)$(R)PulseBiasOffCnt")
+{
+    field(DESC, "Pulse Bias Off Count")
+    field(DTYP, "asynInt32")
+    field(OUT, "@asyn($(PORT) 0)QE_PULSE_BIAS_OFF")
+    field(VAL, "100")
+    field(PINI, "YES")
+}
+
+record(longin, "$(P)$(R)PulseBiasOffCnt_RBV")
+{
+    field(DESC, "Pulse Bias Off Count")
+    field(DTYP, "asynInt32")
+    field(INP, "@asyn($(PORT) 0)QE_PULSE_BIAS_OFF")
+    field(SCAN, "I/O Intr")
+}
+
+record(longout, "$(P)$(R)PulseBiasOnCnt")
+{
+    field(DESC, "Pulse Bias On Count")
+    field(DTYP, "asynInt32")
+    field(OUT, "@asyn($(PORT) 0)QE_PULSE_BIAS_ON")
+    field(VAL, "1")
+    field(PINI, "YES")
+}
+
+record(longin, "$(P)$(R)PulseBiasOnCnt_RBV")
+{
+    field(DESC, "Pulse Bias On Count")
+    field(DTYP, "asynInt32")
+    field(INP, "@asyn($(PORT) 0)QE_PULSE_BIAS_ON")
+    field(SCAN, "I/O Intr")
+}
+
+
 record(mbbo, "$(P)$(R)Range")
 {
     field(ZRST, "Low (5mA !!)")
