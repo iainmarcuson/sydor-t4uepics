@@ -63,7 +63,7 @@ typedef struct {
 /** Class to control the Sydor T4U Electrometer */
 class drvT4U_EM : public drvQuadEM {
 public:
-    drvT4U_EM(const char *portName, const char *qtHostAddress, int ringBufferSize);
+    drvT4U_EM(const char *portName, const char *qtHostAddress, int ringBufferSize, unsigned int base_port_num);
 
     /* These are the methods we implement from asynPortDriver */
     void report(FILE *fp, int details);

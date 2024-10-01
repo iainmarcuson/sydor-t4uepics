@@ -108,7 +108,7 @@ static CmdParseState_t parseCmdName(char *cmdName);
   *            device, e.g. 1 ms SampleTime and 1 second read rate = 1000 samples.
   *            If 0 then default of 2048 is used.
   */
-drvT4U_EM::drvT4U_EM(const char *portName, const char *qtHostAddress, int ringBufferSize) 
+drvT4U_EM::drvT4U_EM(const char *portName, const char *qtHostAddress, int ringBufferSize, unsigned int base_port_num) 
    : drvQuadEM(portName, ringBufferSize)
   
 {
@@ -173,7 +173,7 @@ drvT4U_EM::drvT4U_EM(const char *portName, const char *qtHostAddress, int ringBu
     // Connect the ports
 
     // First the command port
-    epicsSnprintf(tempString, sizeof(tempString), "%s:%d", qtHostAddress, COMMAND_PORT);
+    epicsSnprintf(tempString, sizeof(tempString), "%s:%d", qtHostAddress, base_port_num);
     status = (asynStatus)drvAsynIPPortConfigure(tcpCommandPortName_, tempString, 0, 0, 0);
     printf("Attempted command port: %s connection to: %s\nStatus: %d\n", tcpCommandPortName_, tempString, status);
     if (status) {
@@ -193,7 +193,7 @@ drvT4U_EM::drvT4U_EM(const char *portName, const char *qtHostAddress, int ringBu
     }
 
     // Now the data port
-    epicsSnprintf(tempString, sizeof(tempString), "%s:%d", qtHostAddress, DATA_PORT);
+    epicsSnprintf(tempString, sizeof(tempString), "%s:%d", qtHostAddress, base_port_num+1);
     status = (asynStatus)drvAsynIPPortConfigure(tcpDataPortName_, tempString, 0, 0, 0);
     if (status) {
         asynPrint(pasynUserSelf, ASYN_TRACE_ERROR,
@@ -428,6 +428,16 @@ asynStatus drvT4U_EM::writeInt32(asynUser *pasynUser, epicsInt32 value)
         writeReadMeter();
     }
 
+    if (function < FIRST_T4U_COMMAND)
+    {
+        return (asynStatus)drvQuadEM::writeInt32(pasynUser, value);
+    }
+    else
+    {
+        return asynSuccess;
+    }
+    
+    
     printf("About to return from %s\n", functionName);
     fflush(stdout);
     return (asynStatus)drvQuadEM::writeInt32(pasynUser, value);
@@ -471,6 +481,13 @@ asynStatus drvT4U_EM::writeFloat64(asynUser *pasynUser, epicsFloat64 value)
     {
         epicsSnprintf(outCmdString_, sizeof(outCmdString_), "wr 4 %i\n", (int) value);
         writeReadMeter();
+    }
+    else if (function == P_AveragingTime)
+    {
+	double sample_time;
+	getDoubleParam(P_SampleTime, &sample_time);
+	
+	setIntegerParam(P_NumAverage, int(value/sample_time));
     }
 
     printf("About to exit from %s", functionName);
@@ -938,10 +955,12 @@ int drvT4U_EM::processRegVal(int reg_num, uint32_t reg_val)
         else if (reg_num == REG_T4U_FREQ)
         {
             double sample_time;
+	    double averaging_time;
             setIntegerParam(P_SampleFreq, reg_val);
             sample_time = 1.0/reg_val;
             setDoubleParam(P_SampleTime, sample_time);
-            setDoubleParam(P_AveragingTime, sample_time);
+	    getDoubleParam(P_AveragingTime, &averaging_time);
+	    setIntegerParam(P_NumAverage, int(averaging_time/sample_time));
         }
         else if (reg_num == REG_T4U_RANGE)
         {
@@ -1304,9 +1323,9 @@ extern "C" {
 
 // EPICS iocsh callable function to call constructor for the drvT4U_EM class.
 //-=-= TODO doxygen
-int drvT4U_EMConfigure(const char *portName, const char *qtHostAddress, int ringBufferSize)
+    int drvT4U_EMConfigure(const char *portName, const char *qtHostAddress, int ringBufferSize, int base_port_num)
 {
-    new drvT4U_EM(portName, qtHostAddress, ringBufferSize);
+    new drvT4U_EM(portName, qtHostAddress, ringBufferSize, base_port_num);
     return (asynSuccess);
 }
 
@@ -1315,14 +1334,17 @@ int drvT4U_EMConfigure(const char *portName, const char *qtHostAddress, int ring
 static const iocshArg initArg0 = { "portName", iocshArgString};
 static const iocshArg initArg1 = { "qt host address", iocshArgString};
 static const iocshArg initArg2 = { "ring buffer size",iocshArgInt};
+    static const iocshArg initArg3 = { "base port num",iocshArgInt};
 static const iocshArg * const initArgs[] = {&initArg0,
                                             &initArg1,
-                                            &initArg2};
+                                            &initArg2,
+                                            &initArg3
+};
 
-static const iocshFuncDef initFuncDef = {"drvT4U_EMConfigure",3,initArgs};
+static const iocshFuncDef initFuncDef = {"drvT4U_EMConfigure",4,initArgs};
 static void initCallFunc(const iocshArgBuf *args)
 {
-    drvT4U_EMConfigure(args[0].sval, args[1].sval, args[2].ival);
+    drvT4U_EMConfigure(args[0].sval, args[1].sval, args[2].ival, args[3].ival);
 }
 
 void drvT4U_EMRegister(void)
