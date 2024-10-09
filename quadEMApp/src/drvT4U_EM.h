@@ -34,6 +34,7 @@
 #define P_DACMode_String "QE_DAC_MODE"
 #define P_PosTrackMode_String "QE_POS_TRACK_MODE"
 #define P_PIDEn_String "QE_PID_EN"
+#define P_Updater_String "QE_UPDATE_REG"
 #define P_PIDCuEn_String "QE_PID_CU_EN"
 #define P_PIDHystEn_String "QE_PID_HYST_EN"
 #define P_PIDCtrlPol_String "QE_PID_POL"
@@ -90,6 +91,7 @@ protected:
     int P_DACMode;
     int P_PosTrackMode;
     int P_PIDEn;
+    int P_Update_Reg;
     int P_PIDCuEn;
     int P_PIDHystEn;
     int P_PIDCtrlPol;

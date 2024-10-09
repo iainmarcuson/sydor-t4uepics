@@ -249,6 +249,26 @@ record(bi, "$(P)$(R)PIDCtrlEx_RBV")
 
 
 #------------------
+# Status Updater
+#------------------
+record(longout, "$(P)$(R)Updater")
+{
+    field(DESC, "Update EPICS status")
+    field(DTYP, "asynInt32")
+    field(OUT, "@asyn($(PORT) 0)QE_UPDATE_REG")
+    field(VAL, "1")
+    field(SCAN, "5 second")
+}
+
+record(longin, "$(P)$(R)Updater_RBV")
+{
+    field(DESC, "Update EPICS status")
+    field(DTYP, "asynInt32")
+    field(INP, "@asyn($(PORT) 0)QE_UPDATE_REG")
+    field(SCAN, "I/O Intr")
+}
+
+#------------------
 # Cutout PVs
 #------------------
 

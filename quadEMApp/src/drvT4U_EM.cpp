@@ -157,6 +157,7 @@ drvT4U_EM::drvT4U_EM(const char *portName, const char *qtHostAddress, int ringBu
     createParam(P_DACMode_String, asynParamInt32, &P_DACMode);
     createParam(P_PosTrackMode_String, asynParamInt32, &P_PosTrackMode);
     createParam(P_PIDEn_String, asynParamInt32, &P_PIDEn);
+    createParam(P_Updater_String, asynParamInt32, &P_Update_Reg);
     createParam(P_PIDCuEn_String, asynParamInt32, &P_PIDCuEn);
     createParam(P_PIDHystEn_String, asynParamInt32, &P_PIDHystEn);
     createParam(P_PIDCtrlPol_String, asynParamInt32, &P_PIDCtrlPol);
@@ -379,6 +380,13 @@ asynStatus drvT4U_EM::writeInt32(asynUser *pasynUser, epicsInt32 value)
 
         epicsSnprintf(outCmdString_, sizeof(outCmdString_), "%s %i %i\n",
                       enable_cmd[value], REG_PID_CTRL, PID_EN_MASK);
+        writeReadMeter();
+    }
+    else if (function == P_Update_Reg)
+    {
+	// -=-= XXX 20241009 IM Debug this
+	printf("Running updater.\n");
+	epicsSnprintf(outCmdString_, sizeof(outCmdString_), "tr 100 107\n");
         writeReadMeter();
     }
     else if ((function == P_PIDCuEn) || (function == P_PIDHystEn)
