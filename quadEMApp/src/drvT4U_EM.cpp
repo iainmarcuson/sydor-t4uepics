@@ -170,7 +170,9 @@ drvT4U_EM::drvT4U_EM(const char *portName, const char *qtHostAddress, int ringBu
     strcat(tcpCommandPortName_, portName); // -=-= TODO Add length check?
     strcpy(tcpDataPortName_, "TCP_Data_");
     strcat(tcpDataPortName_, portName);
-
+    strcpy(udpDataPortName_, "UDP_Data_");
+    strcat(udpDataPortName_, portName);
+    
     // Connect the ports
 
     // First the command port
@@ -194,6 +196,7 @@ drvT4U_EM::drvT4U_EM(const char *portName, const char *qtHostAddress, int ringBu
     }
 
     // Now the data port
+    /*
     epicsSnprintf(tempString, sizeof(tempString), "%s:%d", qtHostAddress, base_port_num+1);
     status = (asynStatus)drvAsynIPPortConfigure(tcpDataPortName_, tempString, 0, 0, 0);
     if (status) {
@@ -202,16 +205,26 @@ drvT4U_EM::drvT4U_EM(const char *portName, const char *qtHostAddress, int ringBu
             driverName, functionName, tcpDataPortName_, tempString, status);
         return;
     }
-
-    // Connect to the command port
-    status = pasynOctetSyncIO->connect(tcpDataPortName_, 0, &pasynUserTCPData_, NULL);
+    */
+    
+    // Now the UDP data port
+    epicsSnprintf(tempString, sizeof(tempString), "127.0.0.1:15003:15002 UDP");
+    status = (asynStatus)drvAsynIPPortConfigure(udpDataPortName_, tempString, 0, 0, 0);
     if (status) {
         asynPrint(pasynUserSelf, ASYN_TRACE_ERROR,
-            "%s::%s error connecting to TCP Data port, status=%d, error=%s\n", 
-            driverName, functionName, status, pasynUserTCPData_->errorMessage);
+            "%s::%s error calling drvAsynIPPortConfigure for UDP data port=%s, IP=%s, status=%d\n", 
+            driverName, functionName, udpDataPortName_, tempString, status);
         return;
     }
     
+    // Connect to the command port
+    status = pasynOctetSyncIO->connect(udpDataPortName_, 0, &pasynUserUDPData_, NULL);
+    if (status) {
+        asynPrint(pasynUserSelf, ASYN_TRACE_ERROR,
+            "%s::%s error connecting to UDP Data port, status=%d, error=%s\n", 
+            driverName, functionName, status, pasynUserUDPData_->errorMessage);
+        return;
+    }
     
     acquiring_ = 0;
     readingActive_ = 0;
@@ -775,11 +788,12 @@ void drvT4U_EM::cmdReadThread(void)
 
         // Set the state for looking for a header again
         parseState = kGET_CMD_NAME;
-                
+	
     } // while main receiving loop
     return;
 }
 
+// This one is for UDP
 void drvT4U_EM::dataReadThread(void)
 {
     asynStatus status;
@@ -792,111 +806,152 @@ void drvT4U_EM::dataReadThread(void)
     const int32_t kREAD_TEXT = 0;
     const int32_t kREAD_BINARY = 1;
     int32_t read_path;          // Whether we read via text or via binary
-    
+    char *payload;
+    const int32_t MAX_PACKET_SIZE = 65535;
     static const char *functionName = "dataReadThread";
+    DataBuffer_T udp_buffer;
+    uint32_t ret;
 
+    
     status = asynSuccess;       // -=-= FIXME Used for a different call
     
+    payload = new char[MAX_PACKET_SIZE];	// Maximum size
+    udp_buffer.buffer = payload;
     // Loop forever
     lock();
     while(1)
     {
-        unlock();
+	char c_data;		// Char data
+	uint16_t  s_data;	// Short data
+	uint32_t u_data;	// UINT Data
+	bool b_ok;		// Persistent error variable
+	uint16_t payload_len;	// Payload length
+	
+        unlock();		
         epicsThreadSleep(0.001);
-        memset(InData, '\0', MAX_COMMAND_LEN);
-        status = pasynOctetSyncIO->read(pasynUserTCPData_, InData, nRequest, T4U_EM_TIMEOUT, &nRead, &eomReason);
+        memset(payload, '\0', MAX_PACKET_SIZE);
+	nRequest = MAX_PACKET_SIZE;
+        status = pasynOctetSyncIO->read(pasynUserUDPData_, payload, nRequest, T4U_EM_TIMEOUT, &nRead, &eomReason);
 
-        data_read = -1;         // Set to flush if invalid header
-        if (nRead == 1)
-        {
-            // -=-= DEBUGGING
-            //printf("Data Read: %c\n", InData[0]);
-            //fflush(stdout);
-            // Having received read data, read type and pass to handler
-            if (InData[0] == 'r')   // "r"ead
-            {
-                data_read = readTextCurrVals();
-                read_path = kREAD_TEXT;
-            }
-            else if (InData[0] == 'B') // B1
-            {
-                data_read = readBroadcastPayload();
-                read_path = kREAD_BINARY;
-            }
-            else                // Bad header
-            {
-                data_read = -1; // Flag error
-            }
-            
-            if (data_read < 0)  // Error reading data
-            {
-                pasynOctetSyncIO->flush(pasynUserTCPData_);
-            }
-        }
+	if (status != asynSuccess)
+	{
+	    lock();
+	    callParamCallbacks();
+	    continue;		// Try again next time
+	}
 
-        lock();
-        // -=-= DEBUGGING
-        //printf("Received %i counts\n", data_read);
-        if (data_read > 0)
-        {
-            if (read_path == kREAD_TEXT) // We read from a text command
-            {
-                // Just use the given values
-                for (int data_idx = 0; data_idx < (data_read*4); )
-                {
-                    data_idx += 4;
-                    computePositions(&readCurr_[data_idx-4]);
-                }
-            }
-            else if (read_path == kREAD_BINARY) // We read from binary
-            {
-                // Much data massaging to do
-                // For now, just send dummy values and clear the buffer
-                int32_t num_reads = bc_hdr_.num_reads;
-                uint32_t *curr_raw = (uint32_t *)bc_data_payload_;
-                double read_vals[4];
-                read_vals[1] = 100;
-                read_vals[2] = 100;
-                read_vals[3] = 100;
-                read_vals[0] = 100;
+	b_ok = true;
+	udp_buffer.len = nRead;
+	udp_buffer.pos = 0;
+        data_read = 0;         // Set to flush if invalid header
 
-                for (int32_t read_idx = 0; read_idx < num_reads; read_idx++)
-                {
-                    if (bc_hdr_.units) // Reading current
-                    {
-                        read_vals[0] = (double) (*((float *) &curr_raw[0]));
-                        read_vals[1] = (double) (*((float *) &curr_raw[1]));
-                        read_vals[2] = (double) (*((float *) &curr_raw[2]));
-                        read_vals[3] = (double) (*((float *) &curr_raw[3]));
-                    }
-                    else // Reading raw values
-                    {
-                        read_vals[0] = (rawToCurrent(curr_raw[0])-calOffset_[0]) / calSlope_[0];
-                        read_vals[1] = (rawToCurrent(curr_raw[1])-calOffset_[1]) / calSlope_[1];
-                        read_vals[2] = (rawToCurrent(curr_raw[2])-calOffset_[2]) / calSlope_[2];
-                        read_vals[3] = (rawToCurrent(curr_raw[3])-calOffset_[3]) / calSlope_[3];
-                    }
-                    curr_raw += 4;
-                    
-                    computePositions(read_vals);
-                }
+	printf("Received UDP packet of length %lu\n", (unsigned long) nRead);
+	for (uint32_t byte_idx = 0; byte_idx < 20; byte_idx++)
+	{
+	    printf("%03u ", payload[byte_idx]);
+	}
+	printf("\n");
+	fflush(stdout);
+	
+	// -=-= DEBUGGING
+	//printf("Data Read: %c\n", InData[0]);
+	//fflush(stdout);
+	// Having received read data, read type and pass to handler
+	ret = readDataBuf(&udp_buffer, &c_data, 1);
+	if ((ret < 0) || (c_data != 'B'))
+	{
+	    b_ok = false;
+	}
 
+	if (b_ok)
+	{
+	    ret = readDataBuf(&udp_buffer, &c_data, 1);
+	    if ((ret < 0) || (c_data != 1))
+	    {
+		b_ok = false;
+	    }
+	}
+
+	
+	if (b_ok)
+	{
+	    printf("Read B1 header.\n");
+	    ret = readDataBuf(&udp_buffer, (char *)&s_data, 2);
+	    if (ret < 0)
+	    {
+		b_ok = false;
+	    }
+	    else
+	    {
+		bc_hdr_.units = s_data;
+	    }
+	}
+	    
+	if (b_ok)
+	{
+	    ret = readDataBuf(&udp_buffer, (char *)&payload_len, 2);
+	    if (ret < 0)
+	    {
+		b_ok = false;
+	    }
+	    // Now check if we have enough data received for the buffer
+	    if (udp_buffer.pos > (udp_buffer.len-payload_len))
+	    {
+		b_ok = false;
+	    }
+	}
+
+	if (b_ok)
+	{
+	    printf("Read length.\n");
+	    bc_hdr_.num_reads = payload_len/4/4;
+	    bc_data_payload_ = &udp_buffer.buffer[udp_buffer.pos];
+	    printf("Num reads: %i\n", (int)(bc_hdr_.num_reads));
+	}
+	    
+
+	lock();
+	if (b_ok)
+	{
+	    // Much data massaging to do
+	    // For now, just send dummy values and clear the buffer
+	    int32_t num_reads = bc_hdr_.num_reads;
+	    uint32_t *curr_raw = (uint32_t *)bc_data_payload_;
+	    double read_vals[4];
+	    read_vals[1] = 100;
+	    read_vals[2] = 100;
+	    read_vals[3] = 100;
+	    read_vals[0] = 100;
+	    
+	    for (int32_t read_idx = 0; read_idx < num_reads; read_idx++)
+	    {
+		if (bc_hdr_.units) // Reading current
+		{
+		    read_vals[0] = (double) (*((float *) &curr_raw[0]));
+		    read_vals[1] = (double) (*((float *) &curr_raw[1]));
+		    read_vals[2] = (double) (*((float *) &curr_raw[2]));
+		    read_vals[3] = (double) (*((float *) &curr_raw[3]));
+		}
+		else // Reading raw values
+		{
+		    read_vals[0] = (rawToCurrent(curr_raw[0])-calOffset_[0]) / calSlope_[0];
+		    read_vals[1] = (rawToCurrent(curr_raw[1])-calOffset_[1]) / calSlope_[1];
+		    read_vals[2] = (rawToCurrent(curr_raw[2])-calOffset_[2]) / calSlope_[2];
+		    read_vals[3] = (rawToCurrent(curr_raw[3])-calOffset_[3]) / calSlope_[3];
+		}
+		curr_raw += 4;
                 
-                delete bc_data_payload_;
-            }
-            else                // Not supposed to be here
-            {
-                printf("Error: Impossible position reading data.\n");
-                fflush(stdout);
-            }
-            
-        }
+		computePositions(read_vals);
+	    }
+	}
+         
         callParamCallbacks();
         //fflush(stdout);
     }
     return;
-
+    
 }
+
 
 int32_t drvT4U_EM::processReceivedCommand(char *cmdString)
 {
@@ -1045,6 +1100,37 @@ asynStatus drvT4U_EM::readResponse()
     return asynSuccess;
 }
 
+int32_t drvT4U_EM::readDataBuf(DataBuffer_T *buf, char *dest, uint32_t size)
+{
+    if (buf->pos > (buf->len - size))
+    {
+	return -1;
+    }
+
+    if (size == 1)
+    {
+	*dest = buf->buffer[buf->pos];
+	buf->pos++;
+    }
+    else if (size == 2)
+    {
+	*(reinterpret_cast<uint16_t *>(dest)) = *reinterpret_cast<uint16_t *>(&buf->buffer[buf->pos]);
+	buf->pos += 2;
+    }
+    else if (size == 4)
+    {
+	*(reinterpret_cast<uint32_t *>(dest)) = *reinterpret_cast<uint32_t *>(&buf->buffer[buf->pos]);
+	buf->pos += 4;
+    }
+    else
+    {
+	return -1;
+    }
+
+    return 0;
+}
+	    
+
 asynStatus drvT4U_EM::readDataParam(size_t nRequest, char *dest, size_t *nRead)
 {
     asynStatus status;
@@ -1093,6 +1179,8 @@ asynStatus drvT4U_EM::readDataParam(size_t nRequest, char *dest, size_t *nRead)
 
 }
 
+// Read the UDP Data buffer and keep track of position and length
+
 // Read the values from a binary broadcast payload.  Returns number of full reads, or negative number on failure.
 int32_t drvT4U_EM::readBroadcastPayload()
 {
@@ -1106,6 +1194,7 @@ int32_t drvT4U_EM::readBroadcastPayload()
     int eomReason;
     uint16_t payload_len;
     uint16_t units_current;
+    uint32_t buffer_pos;
 
     // Read second byte of header
     status = readDataParam(1, &c_data, &nRead);

@@ -61,6 +61,12 @@ typedef struct {
     uint32_t num_reads;
 } T4U_Payload_Header_T;
 
+typedef struct {
+    uint32_t len;
+    uint32_t pos;
+    char *buffer;
+} DataBuffer_T;
+
 /** Class to control the Sydor T4U Electrometer */
 class drvT4U_EM : public drvQuadEM {
 public:
@@ -114,8 +120,10 @@ private:
     char *broadcastAddress_;
     char tcpCommandPortName_[MAX_PORTNAME_LEN];
     char tcpDataPortName_[MAX_PORTNAME_LEN];
+    char udpDataPortName_[MAX_PORTNAME_LEN];
     asynUser *pasynUserTCPCommand_;
     asynUser *pasynUserTCPData_;
+    asynUser *pasynUserUDPData_;
     epicsEventId acquireStartEvent_;
     epicsEventId writeCmdEvent_;
     double ranges_[MAX_RANGES];
@@ -145,4 +153,5 @@ private:
     int32_t processRegVal(int reg_num, uint32_t reg_val);
     asynStatus readDataParam(size_t nRequest, char *dest, size_t *nRead);
     int32_t readBroadcastPayload();
+    int32_t readDataBuf(DataBuffer_T *buf, char *dest, uint32_t size);
 };
