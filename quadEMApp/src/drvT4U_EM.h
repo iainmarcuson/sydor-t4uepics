@@ -19,7 +19,7 @@
 #define MAX_PORTNAME_LEN 32
 #define MAX_IPNAME_LEN 16
 #define MAX_RANGES 8
-#define T4U_EM_TIMEOUT 0.2
+#define T4U_EM_TIMEOUT 0.1
 #define MAX_CHAN_READS 16       // The maximum number of channel reads to be sent in one message
 
 
@@ -52,6 +52,13 @@ typedef struct {
 } T4U_Reg_T;
 
 typedef struct {
+    uint32_t len;
+    uint32_t pos;
+    char *buffer;
+} DataBuffer_T;
+
+#pragma pack(push,1)
+typedef struct {
     uint16_t total_len;
     uint32_t frame_num;
     uint16_t gain;
@@ -61,11 +68,41 @@ typedef struct {
     uint32_t num_reads;
 } T4U_Payload_Header_T;
 
-typedef struct {
-    uint32_t len;
-    uint32_t pos;
-    char *buffer;
-} DataBuffer_T;
+typedef struct _T4UMetadata
+{
+    uint64_t timestamp;         /**< time since start *100nS */
+    uint32_t frameNumber;       /**< frame number since start, 1-based */
+    uint32_t status;            /**< status flags (same as status register) */
+    uint16_t gain;              /**< TIA Gain */
+    uint16_t overSamples;       /**< tbd */
+    uint16_t adcGain;           /**< ADC Gain */
+    uint16_t decimation;        /**< ADC Decimation */
+    uint16_t units;			/** 0 = RAW counts, 1 = uA */
+    uint32_t numberOfReads;      /* number of reads contained in imagedata*/
+} T4UMetadata;
+
+typedef struct T4UErrors
+{
+    int16_t data[16];   /**< Increase as needed */
+} T4UErrors;
+
+#define kT4U_MAX_DATA_SIZE 500
+
+typedef int32_t T4UData[ kT4U_MAX_DATA_SIZE * 4];
+
+
+typedef struct _T4UFrame
+{
+    T4UMetadata metadata;
+    T4UErrors   errors;
+    T4UData     image;
+    char        checksum;
+} T4UFrame;
+
+#pragma pack(pop)
+
+const unsigned int T4U_CMD_PORT = 23;
+const unsigned int T4U_DATA_PORT = 10101;
 
 /** Class to control the Sydor T4U Electrometer */
 class drvT4U_EM : public drvQuadEM {

@@ -176,7 +176,7 @@ drvT4U_EM::drvT4U_EM(const char *portName, const char *qtHostAddress, int ringBu
     // Connect the ports
 
     // First the command port
-    epicsSnprintf(tempString, sizeof(tempString), "%s:%d", qtHostAddress, base_port_num);
+    epicsSnprintf(tempString, sizeof(tempString), "%s:%d", qtHostAddress, T4U_CMD_PORT);
     status = (asynStatus)drvAsynIPPortConfigure(tcpCommandPortName_, tempString, 0, 0, 0);
     printf("Attempted command port: %s connection to: %s\nStatus: %d\n", tcpCommandPortName_, tempString, status);
     if (status) {
@@ -208,7 +208,7 @@ drvT4U_EM::drvT4U_EM(const char *portName, const char *qtHostAddress, int ringBu
     */
     
     // Now the UDP data port
-    epicsSnprintf(tempString, sizeof(tempString), "127.0.0.1:15003:15002 UDP");
+    epicsSnprintf(tempString, sizeof(tempString), "127.0.0.1:%u:%u UDP", T4U_DATA_PORT-1, T4U_DATA_PORT);
     status = (asynStatus)drvAsynIPPortConfigure(udpDataPortName_, tempString, 0, 0, 0);
     if (status) {
         asynPrint(pasynUserSelf, ASYN_TRACE_ERROR,
@@ -292,8 +292,8 @@ asynStatus drvT4U_EM::writeInt32(asynUser *pasynUser, epicsInt32 value)
     getAddress(pasynUser, &channel);
 
     // Debugging
-    printf("%s: function %i\n", functionName, function);
-    fflush(stdout);
+    //printf("%s: function %i\n", functionName, function);
+    //fflush(stdout);
     
     /* Set the parameter in the parameter library. */
     status |= setIntegerParam(channel, function, value);
@@ -302,8 +302,8 @@ asynStatus drvT4U_EM::writeInt32(asynUser *pasynUser, epicsInt32 value)
     getParamName(function, &paramName);
 
     // Debugging
-    printf("%s: function %i name %s\n", functionName, function, paramName);
-    fflush(stdout);
+    //printf("%s: function %i name %s\n", functionName, function, paramName);
+    //fflush(stdout);
     
     if (function == P_BiasN_En)
     {
@@ -397,8 +397,13 @@ asynStatus drvT4U_EM::writeInt32(asynUser *pasynUser, epicsInt32 value)
     }
     else if (function == P_Update_Reg)
     {
+	// -=-= FIXME 20241118 IM Needs more work
 	// -=-= XXX 20241009 IM Debug this
-	printf("Running updater.\n");
+	//printf("Running updater.\n");
+	epicsSnprintf(outCmdString_, sizeof(outCmdString_), "tr 0 49\n");
+	writeReadMeter();
+	epicsSnprintf(outCmdString_, sizeof(outCmdString_), "tr 50 99\n");
+	writeReadMeter();
 	epicsSnprintf(outCmdString_, sizeof(outCmdString_), "tr 100 107\n");
         writeReadMeter();
     }
@@ -459,8 +464,8 @@ asynStatus drvT4U_EM::writeInt32(asynUser *pasynUser, epicsInt32 value)
     }
     
     
-    printf("About to return from %s\n", functionName);
-    fflush(stdout);
+    //printf("About to return from %s\n", functionName);
+    //fflush(stdout);
     return (asynStatus)drvQuadEM::writeInt32(pasynUser, value);
 }
 
@@ -483,8 +488,8 @@ asynStatus drvT4U_EM::writeFloat64(asynUser *pasynUser, epicsFloat64 value)
     getParamName(function, &paramName);
 
     // Debugging
-    printf("%s: function %i name %s\n", functionName, function, paramName);
-    fflush(stdout);
+    //printf("%s: function %i name %s\n", functionName, function, paramName);
+    //fflush(stdout);
 
     if ((pid_reg = findRegByAsyn(function)) != nullptr)
     {
@@ -511,8 +516,8 @@ asynStatus drvT4U_EM::writeFloat64(asynUser *pasynUser, epicsFloat64 value)
 	setIntegerParam(P_NumAverage, int(value/sample_time));
     }
 
-    printf("About to exit from %s", functionName);
-    fflush(stdout);
+    //printf("About to exit from %s", functionName);
+    //fflush(stdout);
     if (function < FIRST_T4U_COMMAND)
     {
         return (asynStatus)drvQuadEM::writeFloat64(pasynUser, value);
@@ -570,14 +575,14 @@ asynStatus drvT4U_EM::writeReadMeter()
     void *octetPvt;
 
     // Debugging
-    printf("Entered writeReadMeter()\n");
-    fflush(stdout);
+    //printf("Entered writeReadMeter()\n");
+    //fflush(stdout);
 
     if (strlen(outCmdString_) != 0) // Actual command
     {
         status = pasynOctetSyncIO->write(pasynUserTCPCommand_, outCmdString_, strlen(outCmdString_), T4U_EM_TIMEOUT, &nwrite);
-        printf("Write status %i\n", (int) status);
-        fflush(stdout);
+        //printf("Write status %i\n", (int) status);
+        //fflush(stdout);
     }
         
     return status;
@@ -611,13 +616,14 @@ void drvT4U_EM::cmdReadThread(void)
 
     // Loop forever
     lock();
+    unlock();
     while(1)                    // The main loop of receving commands
     {
         int totalBytesRead;
         int headerBytes;
         bool commandReceived;
-        unlock();
-        epicsThreadSleep(0.001);
+        //unlock();
+        epicsThreadSleep(0.1);
         totalBytesRead = 0;
         memset(InData, '\0', MAX_COMMAND_LEN);
         commandReceived = false; // No proper command recieved yet
@@ -629,6 +635,7 @@ void drvT4U_EM::cmdReadThread(void)
         while (1)
         {
 
+	    nRequest = 1;
             if (parseState == kGET_CMD_NAME)
             {
                 int charRead = 0;
@@ -741,6 +748,10 @@ void drvT4U_EM::cmdReadThread(void)
                 break;
             }
         }
+	//printf("Cmd bytes read: %u \n", totalBytesRead);
+	//printf("InData: %s", InData);
+	continue;
+	//printf("Cmd thread about to lock.\n");
         lock();
 
         if (parseState == kEXEC_ASC_CMD) // We received an ASCII command to parse
@@ -750,6 +761,7 @@ void drvT4U_EM::cmdReadThread(void)
         else if (parseState == kFLUSH) // We had an error somewhere
         {
             unlock();
+	    printf("Cmd thread about to flush.\n");
             pasynOctetSyncIO->flush(pasynUserTCPCommand_); // Flush the socket
             lock();
         }
@@ -773,14 +785,14 @@ void drvT4U_EM::cmdReadThread(void)
 
                 // Now that we have the register number and value, we need to update the PVs
                 //-=-= DEBUGGING
-                printf("Processing reg %3i\n", (int) reg_num);
-                fflush(stdout);
+                //printf("Processing reg %3i\n", (int) reg_num);
+                //fflush(stdout);
                 //-=-= TODO XXX We need to be able to send int, but sometimes we want to treat it as unsigned
                 process_ret = processRegVal(reg_num, reg_val);
                 if (process_ret == 0)
                 {
-                    printf("Processed reg %3i Value: %10i 0x%08x\n", (int) reg_num, (int) reg_val, (int) reg_val);
-                    fflush(stdout);
+                    //printf("Processed reg %3i Value: %10i 0x%08x\n", (int) reg_num, (int) reg_val, (int) reg_val);
+                    //fflush(stdout);
                 }
             } // for tr_idx over all returned tr values
             delete inTr;
@@ -806,19 +818,26 @@ void drvT4U_EM::dataReadThread(void)
     const int32_t kREAD_TEXT = 0;
     const int32_t kREAD_BINARY = 1;
     int32_t read_path;          // Whether we read via text or via binary
-    char *payload;
+    T4UFrame *payload;
     const int32_t MAX_PACKET_SIZE = 65535;
     static const char *functionName = "dataReadThread";
     DataBuffer_T udp_buffer;
     uint32_t ret;
+    char udp_header[2];
+    uint16_t packet_len;
+    FILE *incoming_log;
+    epicsTimeStamp recv_time;
+    char *data_sink;
 
-    
+    //incoming_log = fopen("packet_log.txt", "w");
     status = asynSuccess;       // -=-= FIXME Used for a different call
-    
-    payload = new char[MAX_PACKET_SIZE];	// Maximum size
-    udp_buffer.buffer = payload;
+
+    data_sink = new char[65535];
+    payload = new T4UFrame;	// Maximum size
     // Loop forever
     lock();
+    //-=-= FIXME IM 20241119 Remove the below line after restoring the locks
+    //unlock();
     while(1)
     {
 	char c_data;		// Char data
@@ -828,89 +847,137 @@ void drvT4U_EM::dataReadThread(void)
 	uint16_t payload_len;	// Payload length
 	
         unlock();		
-        epicsThreadSleep(0.001);
-        memset(payload, '\0', MAX_PACKET_SIZE);
-	nRequest = MAX_PACKET_SIZE;
-        status = pasynOctetSyncIO->read(pasynUserUDPData_, payload, nRequest, T4U_EM_TIMEOUT, &nRead, &eomReason);
+        //epicsThreadSleep(0.001);
+	//for (uint32_t loop_idx = 0; loop_idx < 100000; loop_idx++)
+	//{
+        memset(payload, '\0', sizeof(T4UFrame));
+	memset(udp_header, '\0', 2);
+	nRead = 0;
+	while(nRead != 2)
+	{
+	    nRequest = 2;
+	    status = pasynOctetSyncIO->read(pasynUserUDPData_, udp_header, nRequest, 0.01, &nRead, &eomReason);
+	}
+	
+	if ((udp_header[0] != 'B') || (udp_header[1] != 1))
+	{
+	    //-=-= TODO IM Handle B3 packets 20241118
 
+	    if ((udp_header[0] == 'B') && (udp_header[1] == 3))
+	    {
+		uint32_t reg_cnt;
+		nRequest = 2;
+		pasynOctetSyncIO->read(pasynUserUDPData_, (char *)(&packet_len), nRequest, 0.1, &nRead, &eomReason);
+		nRequest = packet_len;
+		pasynOctetSyncIO->read(pasynUserUDPData_, data_sink, nRequest, 0.1, &nRead, &eomReason);
+		reg_cnt = packet_len/6;
+		for (uint32_t reg_idx = 0; reg_idx < reg_cnt; reg_idx++)
+		{
+		    uint32_t reg_num;
+		    uint32_t reg_val;
+
+		    reg_num = *((uint16_t *)&data_sink[reg_idx*6]);
+		    reg_val = *((uint32_t *)&data_sink[reg_idx*6+2]);
+		    processRegVal(reg_num, reg_val);
+		}
+		
+		lock();
+		continue;
+	    }
+	    else
+	    {
+		goto bad_type;
+	    }
+	    
+	}
+
+	nRequest = 2;
+	pasynOctetSyncIO->read(pasynUserUDPData_, (char *)(&packet_len), nRequest, 0.1, &nRead, &eomReason);
+	
+	nRequest = sizeof(T4UMetadata);
+        status = pasynOctetSyncIO->read(pasynUserUDPData_, (char *)(&payload->metadata), nRequest, 0.1, &nRead, &eomReason);
+
+	/* -=-= FIXME IM 20241118
 	if (status != asynSuccess)
 	{
 	    lock();
 	    callParamCallbacks();
 	    continue;		// Try again next time
 	}
+	*/
 
-	b_ok = true;
-	udp_buffer.len = nRead;
-	udp_buffer.pos = 0;
-        data_read = 0;         // Set to flush if invalid header
+	//printf("Received UDP header of length %lu of expected %lu\n", (unsigned long) nRead, (unsigned long) sizeof(T4UMetadata));
+	//payload->metadata.numberOfReads = ntohl(payload->metadata.numberOfReads);
+	//printf("Nreads %u\n", payload->metadata.numberOfReads);
 
-	printf("Received UDP packet of length %lu\n", (unsigned long) nRead);
+	nRequest = sizeof(T4UErrors);
+        status = pasynOctetSyncIO->read(pasynUserUDPData_, (char *)(&payload->errors), nRequest, 0.1, &nRead, &eomReason);
+
+	if (payload->metadata.numberOfReads > kT4U_MAX_DATA_SIZE)
+	{
+	    payload->metadata.numberOfReads = kT4U_MAX_DATA_SIZE;
+	}
+	nRequest = payload->metadata.numberOfReads*4*4;
+	status = pasynOctetSyncIO->read(pasynUserUDPData_, (char *)(&payload->image), nRequest, 0.1, &nRead, &eomReason);
+
+	nRequest = 1;	
+	status = pasynOctetSyncIO->read(pasynUserUDPData_, (char *)(&payload->checksum), nRequest, 0.1, &nRead, &eomReason);
+	
+	if (payload->checksum == '*')
+	{
+	    b_ok = true;
+	}
+	else
+	{
+
+	    //printf("Failed checksum\n");
+	bad_type:
+	    pasynOctetSyncIO->flush(pasynUserUDPData_);
+	    lock();
+	    callParamCallbacks();
+	    continue;
+	}
+
+	/*
+	for (uint32_t lock_idx = 0; lock_idx < 50; lock_idx++)
+	{
+	    lock();
+	    unlock();
+	}
+	*/
+	
+	
+/* -=-= FIXME
 	for (uint32_t byte_idx = 0; byte_idx < 20; byte_idx++)
 	{
 	    printf("%03u ", payload[byte_idx]);
 	}
 	printf("\n");
-	fflush(stdout);
+*/
+	
+	//fflush(stdout);
 	
 	// -=-= DEBUGGING
 	//printf("Data Read: %c\n", InData[0]);
 	//fflush(stdout);
 	// Having received read data, read type and pass to handler
-	ret = readDataBuf(&udp_buffer, &c_data, 1);
-	if ((ret < 0) || (c_data != 'B'))
-	{
-	    b_ok = false;
-	}
 
-	if (b_ok)
-	{
-	    ret = readDataBuf(&udp_buffer, &c_data, 1);
-	    if ((ret < 0) || (c_data != 1))
-	    {
-		b_ok = false;
-	    }
-	}
+	bc_hdr_.units = payload->metadata.units;
 
+	//-=-= FIXME DEBUGGING IM 20241118
+	//printf("Expecting %u reads.\n", payload_len = payload->metadata.numberOfReads);
+
+	payload_len = payload->metadata.numberOfReads;
+
+	bc_hdr_.num_reads = payload_len;
+	bc_data_payload_ = (char *)payload->image;
+
+	//epicsTimeGetCurrent(&recv_time);
+	//fprintf(incoming_log, "%u,%u,", recv_time.secPastEpoch, recv_time.nsec);
+	//fprintf(incoming_log, "%u,%u\n", recv_time.secPastEpoch, recv_time.nsec);
 	
-	if (b_ok)
-	{
-	    printf("Read B1 header.\n");
-	    ret = readDataBuf(&udp_buffer, (char *)&s_data, 2);
-	    if (ret < 0)
-	    {
-		b_ok = false;
-	    }
-	    else
-	    {
-		bc_hdr_.units = s_data;
-	    }
-	}
-	    
-	if (b_ok)
-	{
-	    ret = readDataBuf(&udp_buffer, (char *)&payload_len, 2);
-	    if (ret < 0)
-	    {
-		b_ok = false;
-	    }
-	    // Now check if we have enough data received for the buffer
-	    if (udp_buffer.pos > (udp_buffer.len-payload_len))
-	    {
-		b_ok = false;
-	    }
-	}
-
-	if (b_ok)
-	{
-	    printf("Read length.\n");
-	    bc_hdr_.num_reads = payload_len/4/4;
-	    bc_data_payload_ = &udp_buffer.buffer[udp_buffer.pos];
-	    printf("Num reads: %i\n", (int)(bc_hdr_.num_reads));
-	}
-	    
-
 	lock();
+
 	if (b_ok)
 	{
 	    // Much data massaging to do
@@ -923,7 +990,7 @@ void drvT4U_EM::dataReadThread(void)
 	    read_vals[3] = 100;
 	    read_vals[0] = 100;
 	    
-	    for (int32_t read_idx = 0; read_idx < num_reads; read_idx++)
+	    for (int32_t read_idx = 0; (read_idx < num_reads) && (read_idx < kT4U_MAX_DATA_SIZE); read_idx++)
 	    {
 		if (bc_hdr_.units) // Reading current
 		{
@@ -946,7 +1013,11 @@ void drvT4U_EM::dataReadThread(void)
 	}
          
         callParamCallbacks();
-        //fflush(stdout);
+
+	//epicsTimeGetCurrent(&recv_time);
+	//fprintf(incoming_log, "%u,%u\n", recv_time.secPastEpoch, recv_time.nsec);
+
+//        fflush(stdout);
     }
     return;
     
