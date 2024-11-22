@@ -21,7 +21,7 @@
 #define MAX_RANGES 8
 #define T4U_EM_TIMEOUT 0.1
 #define MAX_CHAN_READS 16       // The maximum number of channel reads to be sent in one message
-
+#define NUM_RANGES 3
 
 #define P_SampleFreq_String "QE_SAMPLE_FREQ"
 #define P_BiasN_En_String "QE_BIAS_N"
@@ -107,7 +107,7 @@ const unsigned int T4U_DATA_PORT = 10101;
 /** Class to control the Sydor T4U Electrometer */
 class drvT4U_EM : public drvQuadEM {
 public:
-    drvT4U_EM(const char *portName, const char *qtHostAddress, int ringBufferSize, unsigned int base_port_num);
+    drvT4U_EM(const char *portName, const char *qtHostAddress, int ringBufferSize, unsigned int base_port_num, const char *cfgFileName);
 
     /* These are the methods we implement from asynPortDriver */
     void report(FILE *fp, int details);
@@ -115,6 +115,7 @@ public:
     /* These are the metods that are new to this class */
     void cmdReadThread(void);
     void dataReadThread(void);
+    int32_t parseConfigFile(const char *cfgFileName);
     virtual void exitHandler();
 
     /* These are functions extended from drvQuadEM */
@@ -173,6 +174,8 @@ private:
     double readCurr_[MAX_CHAN_READS*4]; // The values read from the socket
     double calSlope_[4];
     double calOffset_[4];
+    double fullSlope_[NUM_RANGES][4];
+    double fullOffset_[NUM_RANGES][4];
     int currRange_;
     char *bc_data_payload_;      // Broadcast data payload
     T4U_Payload_Header_T bc_hdr_; // Broadcast data header

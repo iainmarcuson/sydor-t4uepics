@@ -108,7 +108,7 @@ static CmdParseState_t parseCmdName(char *cmdName);
   *            device, e.g. 1 ms SampleTime and 1 second read rate = 1000 samples.
   *            If 0 then default of 2048 is used.
   */
-drvT4U_EM::drvT4U_EM(const char *portName, const char *qtHostAddress, int ringBufferSize, unsigned int base_port_num) 
+drvT4U_EM::drvT4U_EM(const char *portName, const char *qtHostAddress, int ringBufferSize, unsigned int base_port_num, const char *cfgFileName) 
    : drvQuadEM(portName, ringBufferSize)
   
 {
@@ -116,7 +116,14 @@ drvT4U_EM::drvT4U_EM(const char *portName, const char *qtHostAddress, int ringBu
     const char *functionName = "drvT4U_EM";
     char tempString[256];
     T4U_Reg_T curr_reg;
-
+    int32_t ret;
+    
+    ret = parseConfigFile(cfgFileName);
+    if (ret < 0)
+    {
+	printf("Error in calibration file.  Aborting.\n");
+	exit(1);
+    }
     
     ipAddress_[0] = 0;
     firmwareVersion_[0] = 0;
@@ -278,6 +285,89 @@ void drvT4U_EM::report(FILE *fp, int details)
 void drvT4U_EM::exitHandler()
 {
     return;
+}
+
+int32_t drvT4U_EM::parseConfigFile(const char *cfgFileName)
+{
+    FILE *cfgFile;
+    char *curr_line = nullptr;
+    size_t line_len = 0;
+    bool b_all_set;
+
+    // Invalidate all existing calibration values
+    for (uint32_t range_idx = 0; range_idx < NUM_RANGES; range_idx++)
+    {
+	for (uint32_t chan_idx = 0; chan_idx = 0; chan_idx++)
+	{
+	    fullSlope_[range_idx][chan_idx] = nan("");
+	    fullOffset_[range_idx][chan_idx] = nan("");
+	}
+    }
+    
+    cfgFile = fopen(cfgFileName, "r");
+    if (cfgFile == nullptr)
+    {
+	printf("Failed to open file: %s\n", cfgFileName);
+	return -1;
+    }
+
+    while(!feof(cfgFile))
+    {
+	ssize_t read_len;
+	int32_t curr_chan;
+	int32_t curr_range;
+	double slope;
+	double offset;
+	int parse_ret;
+
+	read_len = getline(&curr_line, &line_len, cfgFile);
+	if (read_len == -1)
+	{
+	    //-=-= FIXME TODO IM 20241122
+	    // Handle this somehow
+	    break;
+	}
+
+	if (curr_line[0]  == '#') // Comment line
+	{
+	    continue;		// Move on to the next line
+	}
+
+	parse_ret = sscanf(curr_line, " %i , %i : %lf , %lf ", &curr_range, &curr_chan, &slope, &offset);
+	if (parse_ret != 4)	//  Not expected format
+	{
+	    printf("Invalid config line: %s\nIgnoring.\n", curr_line);
+	    continue;
+	}
+
+        //-=-= FIXME TODO IM 20241122 Do bounds checking
+	fullSlope_[curr_range][curr_chan] = slope;
+	fullOffset_[curr_range][curr_chan] = offset;
+    }
+
+    fclose(cfgFile);
+    free(curr_line); // Memory cleanup
+    // Now check that all values have been configured
+    b_all_set = true;		// Assume true and find a contradiction
+    for (uint32_t range_idx = 0; range_idx < NUM_RANGES; range_idx++)
+    {
+	for (uint32_t chan_idx = 0; chan_idx < 4; chan_idx++)
+	{
+	    if (isnan(fullSlope_[range_idx][chan_idx]) || isnan(fullOffset_[range_idx][chan_idx]))
+	    {
+		b_all_set = false;
+		printf("Error: Range %u, Channel %u not set.\n", range_idx, chan_idx);
+	    }
+	}
+    }
+
+    if (!b_all_set)
+    {
+	printf("Error: Some channel calibrations not set.\n");
+	return -2;
+    }
+
+    return 0;
 }
 
 asynStatus drvT4U_EM::writeInt32(asynUser *pasynUser, epicsInt32 value)
@@ -1491,9 +1581,9 @@ extern "C" {
 
 // EPICS iocsh callable function to call constructor for the drvT4U_EM class.
 //-=-= TODO doxygen
-    int drvT4U_EMConfigure(const char *portName, const char *qtHostAddress, int ringBufferSize, int base_port_num)
+    int drvT4U_EMConfigure(const char *portName, const char *qtHostAddress, int ringBufferSize, int base_port_num, const char *cfgFileName)
 {
-    new drvT4U_EM(portName, qtHostAddress, ringBufferSize, base_port_num);
+    new drvT4U_EM(portName, qtHostAddress, ringBufferSize, base_port_num, cfgFileName);
     return (asynSuccess);
 }
 
@@ -1503,16 +1593,19 @@ static const iocshArg initArg0 = { "portName", iocshArgString};
 static const iocshArg initArg1 = { "qt host address", iocshArgString};
 static const iocshArg initArg2 = { "ring buffer size",iocshArgInt};
     static const iocshArg initArg3 = { "base port num",iocshArgInt};
+    static const iocshArg initArg4 = { "config filename", iocshArgString};
+    
 static const iocshArg * const initArgs[] = {&initArg0,
                                             &initArg1,
                                             &initArg2,
-                                            &initArg3
+                                            &initArg3,
+					    &initArg4
 };
 
-static const iocshFuncDef initFuncDef = {"drvT4U_EMConfigure",4,initArgs};
+static const iocshFuncDef initFuncDef = {"drvT4U_EMConfigure",5,initArgs};
 static void initCallFunc(const iocshArgBuf *args)
 {
-    drvT4U_EMConfigure(args[0].sval, args[1].sval, args[2].ival, args[3].ival);
+    drvT4U_EMConfigure(args[0].sval, args[1].sval, args[2].ival, args[3].ival, args[4].sval);
 }
 
 void drvT4U_EMRegister(void)
