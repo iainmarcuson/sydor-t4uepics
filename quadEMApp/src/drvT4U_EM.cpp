@@ -249,7 +249,7 @@ drvT4U_EM::drvT4U_EM(const char *portName, const char *qtHostAddress, int ringBu
     setDoubleParam(P_Temperature, 1234.5);
     setIntegerParam(P_Geometry, 1);
     //-=-= TODO FIXME Figure out how SampleTime works with averaging
-    //setDoubleParam(P_SampleTime, 0.00025);
+    setDoubleParam(P_SampleTime, 0.00001);
     acquiring_ = 1;
     drvQuadEM::setAcquire(1);
 
@@ -351,6 +351,7 @@ int32_t drvT4U_EM::parseConfigFile(const char *cfgFileName)
         //-=-= FIXME TODO IM 20241122 Do bounds checking
 	fullSlope_[curr_range][curr_chan] = slope;
 	fullOffset_[curr_range][curr_chan] = offset;
+	printf("Calibration Range %i Channel %i Slope %f Offset %f\n", curr_range, curr_chan, slope, offset);
     }
 
     fclose(cfgFile);
@@ -459,6 +460,7 @@ asynStatus drvT4U_EM::writeInt32(asynUser *pasynUser, epicsInt32 value)
     }
     else if (function == P_Range)
     {
+	printf("**************Setting Range\nValue %i\n",value);
         // Clip the range if needed to the limits
         if (value < 0)
         {
@@ -477,9 +479,9 @@ asynStatus drvT4U_EM::writeInt32(asynUser *pasynUser, epicsInt32 value)
 	// Now send the calibration parameters
 	for(uint32_t chan_idx = 0; chan_idx<4; chan_idx++)
 	{
-	    epicsSnprintf(outCmdString_, sizeof(outCmdString_), "wr %i %u\r\n", TXC_CHA_CALIB_SLOPE + chan_idx, *((uint32_t *)(&fullSlope_[value][chan_idx]))); // Need to typepun the float value, then write to the channel for the slope
+	    epicsSnprintf(outCmdString_, sizeof(outCmdString_), "wr %i %i\r\n", TXC_CHA_CALIB_SLOPE + chan_idx, *((int32_t *)(&fullSlope_[value][chan_idx]))); // Need to typepun the float value, then write to the channel for the slope
 	    writeReadMeter();
-	    epicsSnprintf(outCmdString_, sizeof(outCmdString_), "wr %i %u\r\n", TXC_CHA_CALIB_OFFSET + chan_idx, *((uint32_t *)(&fullOffset_[value][chan_idx]))); // As above, but for offset
+	    epicsSnprintf(outCmdString_, sizeof(outCmdString_), "wr %i %i\r\n", TXC_CHA_CALIB_OFFSET + chan_idx, *((int32_t *)(&fullOffset_[value][chan_idx]))); // As above, but for offset
 	    writeReadMeter();
 	}
         
@@ -787,21 +789,25 @@ void drvT4U_EM::cmdReadThread(void)
 			b_outstanding_cmd = true; // If we sent a message, track it
 			cmd_tick_count = 0;
 			printf("Wrote %lu sending command: %s", (long unsigned) nwrite, curr_msg);
+			if (strstr(curr_msg, "wr 1 "))
+			{
+			    cmd_tick_count = -40;
+			}
 			delete[] curr_msg;
 		    }
 		}
 	    }
 	    else		// Something in the command
 	    {
-		printf("Got something.\n");
-		fflush(stdout);
+		//printf("Got something.\n");
+		//fflush(stdout);
 		b_got_prev_char = true;
 		parseState = kGET_CMD_NAME; // Note we are getting a command
 		break;
 	    }
 	}
 		
-        printf("First character: %c\n", currChar);
+        //printf("First character: %c\n", currChar);
         while (1)
         {
 	    nRequest = 1;           // Always request one byte at the start
@@ -888,6 +894,7 @@ void drvT4U_EM::cmdReadThread(void)
                 status = pasynOctetSyncIO->read(pasynUserTCPCommand_, (char *) &tr_len, nRequest, T4U_EM_TIMEOUT, &nRead, &eomReason); // Read the header length
                 if (nRead != 2) // Didn't read whole length
                 {
+		    printf("TR Header read %lu\n", nRead);
                     parseState = kFLUSH;
                 }
                 else            // Read whole length
@@ -929,7 +936,11 @@ void drvT4U_EM::cmdReadThread(void)
         } // while parsing a message on the command socket
 	
 	//printf("Cmd bytes read: %u \n", totalBytesRead);
-	printf("InData: %s", InData);
+	if (InData[0] != 't')
+	{
+	    printf("InData: %s", InData);
+	}
+
 	//printf("Cmd thread about to lock.\n");
         lock();
 
@@ -940,6 +951,7 @@ void drvT4U_EM::cmdReadThread(void)
         else if (parseState == kFLUSH) // We had an error somewhere
         {
             unlock();
+	    printf("InData: %s", InData);
 	    printf("Cmd thread about to flush.\n");
             pasynOctetSyncIO->flush(pasynUserTCPCommand_); // Flush the socket
             lock();
@@ -1330,6 +1342,7 @@ int drvT4U_EM::processRegVal(int reg_num, uint32_t reg_val)
             double slope_val;
 
             slope_val = (double) (*((float *) &reg_val));
+	    //printf("Calculated slope %i is %f\n", reg_num-TXC_CHA_CALIB_SLOPE, slope_val);
             calSlope_[reg_num - TXC_CHA_CALIB_SLOPE] = slope_val;
         }
         else if ((reg_num >= TXC_CHA_CALIB_OFFSET) && (reg_num <= TXC_CHD_CALIB_OFFSET))
@@ -1337,6 +1350,7 @@ int drvT4U_EM::processRegVal(int reg_num, uint32_t reg_val)
             double offset_val;
 
             offset_val = (double) (*((float *) &reg_val));
+	    //printf("Calculated offset %i is %f\n", reg_num-TXC_CHA_CALIB_OFFSET, offset_val);
             calOffset_[reg_num - TXC_CHA_CALIB_OFFSET] = offset_val;
         }
         else                    // An unhandled command
@@ -1644,7 +1658,8 @@ CmdParseState_t parseCmdName(char *cmdName)
     CmdParseState_t parseState;
     if (strcmp(cmdName, "tr") == 0)
     {
-        parseState = kPARSE_TR_HDR;
+        //parseState = kPARSE_TR_HDR;
+	parseState = kPARSE_ASC_CMD;
     }
     else if (strcmp(cmdName, "wr") == 0)
     {
