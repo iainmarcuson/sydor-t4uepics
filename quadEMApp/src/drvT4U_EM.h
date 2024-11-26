@@ -14,6 +14,7 @@
 #include <arpa/inet.h>
 
 #include "drvQuadEM.h"
+#include "epicsRingPointer.h"
 
 #define MAX_COMMAND_LEN 256
 #define MAX_PORTNAME_LEN 32
@@ -22,6 +23,7 @@
 #define T4U_EM_TIMEOUT 0.1
 #define MAX_CHAN_READS 16       // The maximum number of channel reads to be sent in one message
 #define NUM_RANGES 3
+#define T4U_CMD_QUEUE_LEN 300
 
 #define P_SampleFreq_String "QE_SAMPLE_FREQ"
 #define P_BiasN_En_String "QE_BIAS_N"
@@ -174,14 +176,15 @@ private:
     double readCurr_[MAX_CHAN_READS*4]; // The values read from the socket
     double calSlope_[4];
     double calOffset_[4];
-    double fullSlope_[NUM_RANGES][4];
-    double fullOffset_[NUM_RANGES][4];
+    float fullSlope_[NUM_RANGES][4];
+    float fullOffset_[NUM_RANGES][4];
     int currRange_;
     char *bc_data_payload_;      // Broadcast data payload
     T4U_Payload_Header_T bc_hdr_; // Broadcast data header
     
     std::forward_list<T4U_Reg_T> pidRegData_; /* Holds parameters for PID regs */
-
+    epicsRingPointer<char> *cmd_queue;
+    
     asynStatus writeReadMeter();
     asynStatus getFirmwareVersion();
     void process_reg(const T4U_Reg_T *reg_lookup, double value);

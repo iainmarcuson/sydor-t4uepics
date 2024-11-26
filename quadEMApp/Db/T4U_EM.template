@@ -145,6 +145,8 @@ record(mbbo, "$(P)$(R)Range")
     field(ONVL, "1")
     field(TWST, "Hi (300nA)")
     field(TWVL, "0")
+    field(VAL, "0")
+    field(PINI, "YES")
 }
 
 record(mbbi, "$(P)$(R)Range_RBV")
@@ -354,7 +356,7 @@ record(longout, "$(P)$(R)SampleFreq")
     field(DTYP, "asynInt32")
     field(OUT, "@asyn($(PORT) 0)QE_SAMPLE_FREQ")
     field(VAL, "10000")
-    field(PINI, "NO")
+    field(PINI, "YES")
 }
 
 record(longin, "$(P)$(R)SampleFreq_RBV")

@@ -232,6 +232,14 @@ drvT4U_EM::drvT4U_EM(const char *portName, const char *qtHostAddress, int ringBu
             driverName, functionName, status, pasynUserUDPData_->errorMessage);
         return;
     }
+
+    // Initialize the command queue
+    cmd_queue = new epicsRingPointer<char>(T4U_CMD_QUEUE_LEN, false);
+    if (cmd_queue == nullptr)
+    {
+	printf("Error initializing command queue.\n");
+	return;
+    }
     
     acquiring_ = 0;
     readingActive_ = 0;
@@ -297,10 +305,10 @@ int32_t drvT4U_EM::parseConfigFile(const char *cfgFileName)
     // Invalidate all existing calibration values
     for (uint32_t range_idx = 0; range_idx < NUM_RANGES; range_idx++)
     {
-	for (uint32_t chan_idx = 0; chan_idx = 0; chan_idx++)
+	for (uint32_t chan_idx = 0; chan_idx == 0; chan_idx++)
 	{
-	    fullSlope_[range_idx][chan_idx] = nan("");
-	    fullOffset_[range_idx][chan_idx] = nan("");
+	    fullSlope_[range_idx][chan_idx] = nanf("");
+	    fullOffset_[range_idx][chan_idx] = nanf("");
 	}
     }
     
@@ -316,8 +324,8 @@ int32_t drvT4U_EM::parseConfigFile(const char *cfgFileName)
 	ssize_t read_len;
 	int32_t curr_chan;
 	int32_t curr_range;
-	double slope;
-	double offset;
+	float slope;
+	float offset;
 	int parse_ret;
 
 	read_len = getline(&curr_line, &line_len, cfgFile);
@@ -333,7 +341,7 @@ int32_t drvT4U_EM::parseConfigFile(const char *cfgFileName)
 	    continue;		// Move on to the next line
 	}
 
-	parse_ret = sscanf(curr_line, " %i , %i : %lf , %lf ", &curr_range, &curr_chan, &slope, &offset);
+	parse_ret = sscanf(curr_line, " %i , %i : %f , %f ", &curr_range, &curr_chan, &slope, &offset);
 	if (parse_ret != 4)	//  Not expected format
 	{
 	    printf("Invalid config line: %s\nIgnoring.\n", curr_line);
@@ -399,11 +407,11 @@ asynStatus drvT4U_EM::writeInt32(asynUser *pasynUser, epicsInt32 value)
     {
         if (value)              // Turn on
         {
-            epicsSnprintf(outCmdString_, sizeof(outCmdString_), "bs 0 0x200\n");
+            epicsSnprintf(outCmdString_, sizeof(outCmdString_), "bs 0 0x200\r\n");
         }
         else                    // Turn off
         {
-            epicsSnprintf(outCmdString_, sizeof(outCmdString_), "bc 0 0x200\n");
+            epicsSnprintf(outCmdString_, sizeof(outCmdString_), "bc 0 0x200\r\n");
         }
         writeReadMeter();
     }
@@ -411,11 +419,11 @@ asynStatus drvT4U_EM::writeInt32(asynUser *pasynUser, epicsInt32 value)
     {
         if (value)              // Turn on
         {
-            epicsSnprintf(outCmdString_, sizeof(outCmdString_), "bs 0 0x400\n");
+            epicsSnprintf(outCmdString_, sizeof(outCmdString_), "bs 0 0x400\r\n");
         }
         else                    // Turn off
         {
-            epicsSnprintf(outCmdString_, sizeof(outCmdString_), "bc 0 0x400\n");
+            epicsSnprintf(outCmdString_, sizeof(outCmdString_), "bc 0 0x400\r\n");
         }
         writeReadMeter();
     }
@@ -423,29 +431,29 @@ asynStatus drvT4U_EM::writeInt32(asynUser *pasynUser, epicsInt32 value)
     {
         if (value)              // Turn on
         {
-            epicsSnprintf(outCmdString_, sizeof(outCmdString_), "bs 0 %i\n", (int) PULSE_BIAS_EN_MASK);
+            epicsSnprintf(outCmdString_, sizeof(outCmdString_), "bs 0 %i\r\n", (int) PULSE_BIAS_EN_MASK);
         }
         else                    // Turn off
         {
-            epicsSnprintf(outCmdString_, sizeof(outCmdString_), "bc 0 %i\n", (int) PULSE_BIAS_EN_MASK);
+            epicsSnprintf(outCmdString_, sizeof(outCmdString_), "bc 0 %i\r\n", (int) PULSE_BIAS_EN_MASK);
         }
         writeReadMeter();
     }
     else if (function == P_PulseBias_OffCnt)
     {
-        epicsSnprintf(outCmdString_, sizeof(outCmdString_), "wr %i %i\n",
+        epicsSnprintf(outCmdString_, sizeof(outCmdString_), "wr %i %i\r\n",
                       (int) PULSE_BIAS_OFF_REG, value);
         writeReadMeter();
     }
     else if (function == P_PulseBias_OnCnt)
     {
-        epicsSnprintf(outCmdString_, sizeof(outCmdString_), "wr %i %i\n",
+        epicsSnprintf(outCmdString_, sizeof(outCmdString_), "wr %i %i\r\n",
                       (int) PULSE_BIAS_ON_REG, value);
         writeReadMeter();
     }
     else if (function == P_SampleFreq)
     {
-        epicsSnprintf(outCmdString_, sizeof(outCmdString_), "wr %i %i\n",
+        epicsSnprintf(outCmdString_, sizeof(outCmdString_), "wr %i %i\r\n",
                       REG_T4U_FREQ, value);
         writeReadMeter();
     }
@@ -463,8 +471,17 @@ asynStatus drvT4U_EM::writeInt32(asynUser *pasynUser, epicsInt32 value)
         // Set in the parameter library again, since it may have been changed
         // above.
         status |= setIntegerParam(channel, function, value);
-        epicsSnprintf(outCmdString_, sizeof(outCmdString_), "wr 3 %i\n", value);
+        epicsSnprintf(outCmdString_, sizeof(outCmdString_), "wr 3 %i\r\n", value);
         writeReadMeter();
+
+	// Now send the calibration parameters
+	for(uint32_t chan_idx = 0; chan_idx<4; chan_idx++)
+	{
+	    epicsSnprintf(outCmdString_, sizeof(outCmdString_), "wr %i %u\r\n", TXC_CHA_CALIB_SLOPE + chan_idx, *((uint32_t *)(&fullSlope_[value][chan_idx]))); // Need to typepun the float value, then write to the channel for the slope
+	    writeReadMeter();
+	    epicsSnprintf(outCmdString_, sizeof(outCmdString_), "wr %i %u\r\n", TXC_CHA_CALIB_OFFSET + chan_idx, *((uint32_t *)(&fullOffset_[value][chan_idx]))); // As above, but for offset
+	    writeReadMeter();
+	}
         
         currRange_ = value;
     }
@@ -472,16 +489,16 @@ asynStatus drvT4U_EM::writeInt32(asynUser *pasynUser, epicsInt32 value)
     {
         int calc_reg = 93; // Base register
         // There are multiple functions, so clear out the DAC mode bits and then set them according to the mode
-        epicsSnprintf(outCmdString_, sizeof(outCmdString_), "bc %i %i\n", calc_reg, OUTPUT_MODE_MASK);
+        epicsSnprintf(outCmdString_, sizeof(outCmdString_), "bc %i %i\r\n", calc_reg, OUTPUT_MODE_MASK);
         writeReadMeter();
-        epicsSnprintf(outCmdString_, sizeof(outCmdString_), "bs %i %i\n", calc_reg, value & OUTPUT_MODE_MASK);
+        epicsSnprintf(outCmdString_, sizeof(outCmdString_), "bs %i %i\r\n", calc_reg, value & OUTPUT_MODE_MASK);
         writeReadMeter();
     }
     else if (function == P_PIDEn)
     {
         char *enable_cmd[2] = {"bc", "bs"}; // Off does bc; On does bs
 
-        epicsSnprintf(outCmdString_, sizeof(outCmdString_), "%s %i %i\n",
+        epicsSnprintf(outCmdString_, sizeof(outCmdString_), "%s %i %i\r\n",
                       enable_cmd[value], REG_PID_CTRL, PID_EN_MASK);
         writeReadMeter();
     }
@@ -490,11 +507,11 @@ asynStatus drvT4U_EM::writeInt32(asynUser *pasynUser, epicsInt32 value)
 	// -=-= FIXME 20241118 IM Needs more work
 	// -=-= XXX 20241009 IM Debug this
 	//printf("Running updater.\n");
-	epicsSnprintf(outCmdString_, sizeof(outCmdString_), "tr 0 49\n");
+	epicsSnprintf(outCmdString_, sizeof(outCmdString_), "tr 0 49\r\n");
 	writeReadMeter();
-	epicsSnprintf(outCmdString_, sizeof(outCmdString_), "tr 50 99\n");
+	epicsSnprintf(outCmdString_, sizeof(outCmdString_), "tr 50 99\r\n");
 	writeReadMeter();
-	epicsSnprintf(outCmdString_, sizeof(outCmdString_), "tr 100 107\n");
+	epicsSnprintf(outCmdString_, sizeof(outCmdString_), "tr 100 107\r\n");
         writeReadMeter();
     }
     else if ((function == P_PIDCuEn) || (function == P_PIDHystEn)
@@ -522,7 +539,7 @@ asynStatus drvT4U_EM::writeInt32(asynUser *pasynUser, epicsInt32 value)
         }
         
 
-        epicsSnprintf(outCmdString_, sizeof(outCmdString_), "%s %i %i\n",
+        epicsSnprintf(outCmdString_, sizeof(outCmdString_), "%s %i %i\r\n",
                       enable_cmd[value], reg, mask); // Write to X
         writeReadMeter();
 
@@ -535,11 +552,11 @@ asynStatus drvT4U_EM::writeInt32(asynUser *pasynUser, epicsInt32 value)
         int shift_val = (value & PID_POS_TRACK_MASK) << PID_POS_TRACK_SHIFT;
 
         // First clear the exist position bits
-        epicsSnprintf(outCmdString_, sizeof(outCmdString_), "bc %i %i\n",
+        epicsSnprintf(outCmdString_, sizeof(outCmdString_), "bc %i %i\r\n",
                       reg, shift_mask);
         writeReadMeter();
         // Now set the bits to the selected value
-        epicsSnprintf(outCmdString_, sizeof(outCmdString_), "bs %i %i\n",
+        epicsSnprintf(outCmdString_, sizeof(outCmdString_), "bs %i %i\r\n",
                       reg, shift_val);
         writeReadMeter();
     }
@@ -584,18 +601,18 @@ asynStatus drvT4U_EM::writeFloat64(asynUser *pasynUser, epicsFloat64 value)
     if ((pid_reg = findRegByAsyn(function)) != nullptr)
     {
         int out_val = scaleParamToReg(value, pid_reg);
-        epicsSnprintf(outCmdString_, sizeof(outCmdString_), "wr %i %i\n",
+        epicsSnprintf(outCmdString_, sizeof(outCmdString_), "wr %i %i\r\n",
                       pid_reg->reg_num, out_val);
         writeReadMeter();
     }
     else if (function == P_BiasN_Voltage)
     {
-        epicsSnprintf(outCmdString_, sizeof(outCmdString_), "wr 5 %i\n", (int) value);
+        epicsSnprintf(outCmdString_, sizeof(outCmdString_), "wr 5 %i\r\n", (int) value);
         writeReadMeter();
     }
     else if (function == P_BiasP_Voltage)
     {
-        epicsSnprintf(outCmdString_, sizeof(outCmdString_), "wr 4 %i\n", (int) value);
+        epicsSnprintf(outCmdString_, sizeof(outCmdString_), "wr 4 %i\r\n", (int) value);
         writeReadMeter();
     }
     else if (function == P_AveragingTime)
@@ -663,6 +680,7 @@ asynStatus drvT4U_EM::writeReadMeter()
     asynOctet *pasynOctet;
     asynInterface *pasynInterface;
     void *octetPvt;
+    char *new_cmd;
 
     // Debugging
     //printf("Entered writeReadMeter()\n");
@@ -670,7 +688,21 @@ asynStatus drvT4U_EM::writeReadMeter()
 
     if (strlen(outCmdString_) != 0) // Actual command
     {
-        status = pasynOctetSyncIO->write(pasynUserTCPCommand_, outCmdString_, strlen(outCmdString_), T4U_EM_TIMEOUT, &nwrite);
+	new_cmd = new char[strlen(outCmdString_)+1];
+	if (new_cmd == nullptr)
+	{
+	    return asynError;
+	}
+	strcpy(new_cmd, outCmdString_);
+	if (cmd_queue->push(new_cmd))
+	{
+	    return asynSuccess;
+	}
+	else
+	{
+	    return asynOverflow;
+	}
+        
         //printf("Write status %i\n", (int) status);
         //fflush(stdout);
     }
@@ -701,19 +733,23 @@ void drvT4U_EM::cmdReadThread(void)
     int processRet;
     static const char *functionName = "cmdReadThread";
     CmdParseState_t parseState = kGET_CMD_NAME;
+    int32_t cmd_tick_count;
+    
 
     status = asynSuccess;       // -=-= FIXME Used for a different call
 
     // Loop forever
     lock();
-    unlock();
     while(1)                    // The main loop of receving commands
     {
         int totalBytesRead;
         int headerBytes;
         bool commandReceived;
-        //unlock();
-        epicsThreadSleep(0.1);
+	bool b_outstanding_cmd;
+	bool b_got_prev_char;
+	size_t nwrite;
+        unlock();
+        epicsThreadSleep(0.001);
         totalBytesRead = 0;
         memset(InData, '\0', MAX_COMMAND_LEN);
         commandReceived = false; // No proper command recieved yet
@@ -721,23 +757,76 @@ void drvT4U_EM::cmdReadThread(void)
         uint16_t reg_num;
         uint32_t reg_val;
         bool nonWhite = false;
-        nRequest = 1;           // Always request one byte at the start
+	cmd_tick_count = 0;    // Start at no ticks for timeout
+	b_outstanding_cmd = false;
+	b_got_prev_char = false;
+	lock();
+    process_tick:
+	unlock();
+	while (1)
+	{
+	    nRequest = 1;
+	    cmd_tick_count++;
+
+	    status = pasynOctetSyncIO->read(pasynUserTCPCommand_, &currChar, nRequest, 0.1, &nRead, &eomReason);
+	    memset(InData, '\0', sizeof(InData)); // Initialize the buffer
+
+	    // See if there are any outstanding commands
+	    if (nRead == 0)
+	    {
+		cmd_tick_count++;
+		if (cmd_tick_count >= 12) // 1 second timeout time reached
+		{
+		    // Process message queue
+		    char *curr_msg;
+		    curr_msg = cmd_queue->pop();
+		    
+		    if (curr_msg)
+		    { 
+			status = pasynOctetSyncIO->write(pasynUserTCPCommand_, curr_msg, strlen(curr_msg), T4U_EM_TIMEOUT, &nwrite);
+			b_outstanding_cmd = true; // If we sent a message, track it
+			cmd_tick_count = 0;
+			printf("Wrote %lu sending command: %s", (long unsigned) nwrite, curr_msg);
+			delete[] curr_msg;
+		    }
+		}
+	    }
+	    else		// Something in the command
+	    {
+		printf("Got something.\n");
+		fflush(stdout);
+		b_got_prev_char = true;
+		parseState = kGET_CMD_NAME; // Note we are getting a command
+		break;
+	    }
+	}
+		
+        printf("First character: %c\n", currChar);
         while (1)
         {
-
-	    nRequest = 1;
-            if (parseState == kGET_CMD_NAME)
+	    nRequest = 1;           // Always request one byte at the start
+	    if (parseState == kGET_CMD_NAME)
             {
                 int charRead = 0;
                 nonWhite = false; // No non-white at start
                 while(1)
                 {
-                    status = pasynOctetSyncIO->read(pasynUserTCPCommand_, &currChar, nRequest, T4U_EM_TIMEOUT, &nRead, &eomReason); // Start by reading in a byte
-                    if (nRead == 0)     // No bytes available
-                    {
-                        continue;
-                    }
-
+		    if (!b_got_prev_char) // We have come from elsewhere with a character
+			// Skip the read the first time
+		    {
+			status = pasynOctetSyncIO->read(pasynUserTCPCommand_, &currChar, nRequest, T4U_EM_TIMEOUT, &nRead, &eomReason); // Start by reading in a byte
+			if (nRead == 0)     // No bytes available
+			{
+			    continue;
+			}
+		    }
+		    else
+		    {
+			charRead = 0; // Reset the counter for the array below
+		    }
+		    
+		    b_got_prev_char = false;
+		    
                     if ((nonWhite == false) && isspace(currChar)) // Skip whitespace if we haven't already read a non-space character
                     {
                         continue;
@@ -837,10 +926,10 @@ void drvT4U_EM::cmdReadThread(void)
             {
                 break;
             }
-        }
+        } // while parsing a message on the command socket
+	
 	//printf("Cmd bytes read: %u \n", totalBytesRead);
-	//printf("InData: %s", InData);
-	continue;
+	printf("InData: %s", InData);
 	//printf("Cmd thread about to lock.\n");
         lock();
 
@@ -890,7 +979,9 @@ void drvT4U_EM::cmdReadThread(void)
 
         // Set the state for looking for a header again
         parseState = kGET_CMD_NAME;
-	
+	b_outstanding_cmd = false; // Clear the outstanding flag one way or another
+	cmd_tick_count = 10;	   // Set to force a check of queued outgoing commands
+	goto process_tick;
     } // while main receiving loop
     return;
 }
@@ -969,6 +1060,7 @@ void drvT4U_EM::dataReadThread(void)
 		    reg_num = *((uint16_t *)&data_sink[reg_idx*6]);
 		    reg_val = *((uint32_t *)&data_sink[reg_idx*6+2]);
 		    processRegVal(reg_num, reg_val);
+		    //printf("Process reg %u.\n", reg_num);
 		}
 		
 		lock();
@@ -1185,6 +1277,7 @@ int drvT4U_EM::processRegVal(int reg_num, uint32_t reg_val)
             setDoubleParam(P_SampleTime, sample_time);
 	    getDoubleParam(P_AveragingTime, &averaging_time);
 	    setIntegerParam(P_NumAverage, int(averaging_time/sample_time));
+	    printf("Number to average: %i\n", int(averaging_time/sample_time));
         }
         else if (reg_num == REG_T4U_RANGE)
         {
