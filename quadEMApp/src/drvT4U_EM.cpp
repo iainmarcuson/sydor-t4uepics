@@ -461,7 +461,7 @@ asynStatus drvT4U_EM::writeInt32(asynUser *pasynUser, epicsInt32 value)
     }
     else if (function == P_Range)
     {
-	printf("**************Setting Range\nValue %i\n",value);
+	//printf("**************Setting Range\nValue %i\n",value);
         // Clip the range if needed to the limits
         if (value < 0)
         {
@@ -789,7 +789,7 @@ void drvT4U_EM::cmdReadThread(void)
 			status = pasynOctetSyncIO->write(pasynUserTCPCommand_, curr_msg, strlen(curr_msg), T4U_EM_TIMEOUT, &nwrite);
 			b_outstanding_cmd = true; // If we sent a message, track it
 			cmd_tick_count = 0;
-			printf("Wrote %lu sending command: %s", (long unsigned) nwrite, curr_msg);
+			//printf("Wrote %lu sending command: %s", (long unsigned) nwrite, curr_msg);
 			if (strstr(curr_msg, "wr 1 "))
 			{
 			    cmd_tick_count = -40;
@@ -895,7 +895,7 @@ void drvT4U_EM::cmdReadThread(void)
                 status = pasynOctetSyncIO->read(pasynUserTCPCommand_, (char *) &tr_len, nRequest, T4U_EM_TIMEOUT, &nRead, &eomReason); // Read the header length
                 if (nRead != 2) // Didn't read whole length
                 {
-		    printf("TR Header read %lu\n", nRead);
+		    //printf("TR Header read %lu\n", nRead);
                     parseState = kFLUSH;
                 }
                 else            // Read whole length
@@ -937,10 +937,10 @@ void drvT4U_EM::cmdReadThread(void)
         } // while parsing a message on the command socket
 	
 	//printf("Cmd bytes read: %u \n", totalBytesRead);
-	if (InData[0] != 't')
-	{
-	    printf("InData: %s", InData);
-	}
+	//if (InData[0] != 't')
+	//{
+	//    printf("InData: %s", InData);
+	//}
 
 	//printf("Cmd thread about to lock.\n");
         lock();
@@ -1290,7 +1290,7 @@ int drvT4U_EM::processRegVal(int reg_num, uint32_t reg_val)
             setDoubleParam(P_SampleTime, sample_time);
 	    getDoubleParam(P_AveragingTime, &averaging_time);
 	    setIntegerParam(P_NumAverage, int(averaging_time/sample_time));
-	    printf("Number to average: %i\n", int(averaging_time/sample_time));
+	    //printf("Number to average: %i\n", int(averaging_time/sample_time));
         }
         else if (reg_num == REG_T4U_RANGE)
         {
