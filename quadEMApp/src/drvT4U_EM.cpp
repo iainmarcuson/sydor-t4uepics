@@ -129,7 +129,7 @@ drvT4U_EM::drvT4U_EM(const char *portName, const char *qtHostAddress, int ringBu
     firmwareVersion_[0] = 0;
 
     // Set a range index to a default
-    currRange_ = 0;
+    currRange_ = 2;
     // Range scale factors
     ranges_[0]=5e6;
     ranges_[1]=14955.12;
@@ -243,6 +243,7 @@ drvT4U_EM::drvT4U_EM(const char *portName, const char *qtHostAddress, int ringBu
     
     acquiring_ = 0;
     readingActive_ = 0;
+    setIntegerParam(P_Range, 2);
     setIntegerParam(P_Model, QE_ModelSydor_EM);
     setIntegerParam(P_ValuesPerRead, 5);
     setStringParam(P_Firmware, "1.48");
